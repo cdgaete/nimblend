@@ -2,7 +2,11 @@
 Zarr storage support for NimbleNd arrays.
 """
 
+import json
+import os
 from typing import Dict, Optional, Tuple, Union
+
+import numpy as np
 
 from ..core import HAS_DASK, Array
 
@@ -42,82 +46,136 @@ def to_zarr(
             "Zarr is required for this functionality. Please install it with pip install zarr"
         )
 
-    # Create a Zarr group
+    # Use file system storage directly to avoid string type warnings
+    # Create directory if it doesn't exist
+    os.makedirs(path, exist_ok=True)
+
+    # Store metadata in a separate JSON file instead of Zarr attributes
+    # This avoids Zarr dealing with string types in attributes
+    metadata = {
+        "dims": array.dims,
+        "name": array.name,
+        "data_shape": array.data.shape if hasattr(array.data, "shape") else None,
+        "coords": {},
+    }
+
+    # Create a Zarr group for the data and coordinates
     root = zarr.open_group(path, mode=mode)
 
-    # Store the array data with appropriate chunking
-    if array.is_lazy:
-        # Get chunks from Dask array if available
-        chunks = array.data.chunks
-
-        # Store data - dask.array.to_zarr is more efficient for lazy arrays
-        import dask.array as da
-
-        da.to_zarr(
-            array.data,
-            url=path,
-            component="data",
-            overwrite=True,
-            compute=True,
-            return_stored=False,
-            storage_options=None,
-            chunks=chunks,
-        )
-    else:
-        # Store data directly - handle Zarr v2 vs v3 differences
-        if is_zarr_v3:
-            # For Zarr v3
-            # Always provide chunks parameter - use "auto" if none specified
-            # This is critical for Zarr v3 which can't handle None for chunks
-            if compression == "blosc":
-                compressors = "auto"
-            else:
-                compressors = None  # No compression
-
-            # Create the array with automatic chunking if none specified
-            data_array = root.create_array(
-                "data",
-                shape=array.data.shape,
-                chunks="auto",  # Always provide a valid chunks value
-                dtype=array.data.dtype,
-                compressors=compressors,
-            )
-            # Write the data
-            data_array[:] = array.data
-        else:
-            # For Zarr v2
-            root.create_array("data", data=array.data, compression=compression)
-
-    # Store dimensions
-    root.attrs["dims"] = array.dims
-
-    # Store coordinates for each dimension
+    # Process coordinates first
     coords_group = root.create_group("coords")
     for dim, coord_values in array.coords.items():
-        if is_zarr_v3:
-            # For Zarr v3
-            if compression == "blosc":
-                compressors = "auto"
-            else:
-                compressors = None
+        # Save metadata about this coordinate
+        coord_metadata = {
+            "shape": coord_values.shape,
+            "dtype": str(coord_values.dtype),
+            "is_string": coord_values.dtype.kind == "U",
+        }
+        metadata["coords"][dim] = coord_metadata
 
-            # Create the array for coordinates - always specify chunks explicitly
-            coord_array = coords_group.create_array(
-                dim,
-                shape=coord_values.shape,
-                dtype=coord_values.dtype,
-                chunks="auto",  # Always use auto-chunking to avoid None
-                compressors=compressors,
+        # If string coordinate, convert to bytes for storage
+        if is_zarr_v3 and coord_values.dtype.kind == "U":
+            # Convert to bytes as NumPy object array
+            bytes_coords = np.array(
+                [str(x).encode("utf-8") for x in coord_values.flatten()], dtype=object
             )
+
+            # Save the bytes to a npy file instead of zarr to avoid warnings
+            np_path = os.path.join(path, f"coords_{dim}.npy")
+            np.save(np_path, bytes_coords)
+        else:
+            # Create the array for coordinates
+            if is_zarr_v3:
+                # Always use auto-chunking for Zarr v3
+                if compression == "blosc":
+                    compressors = "auto"
+                else:
+                    compressors = None
+
+                coord_array = coords_group.create_array(
+                    dim,
+                    shape=coord_values.shape,
+                    dtype=coord_values.dtype,
+                    chunks="auto",
+                    compressors=compressors,
+                )
+            else:
+                # For Zarr v2
+                coord_array = coords_group.create_dataset(
+                    dim, data=coord_values, compression=compression
+                )
+
             # Write the coordinate data
             coord_array[:] = coord_values
-        else:
-            # For Zarr v2
-            coords_group.create_dataset(dim, data=coord_values, compression=compression)
 
-    # Store array name if it exists
-    if array.name is not None:
-        root.attrs["name"] = array.name
+    # Handle the main data array
+    is_string_data = hasattr(array.data, "dtype") and array.data.dtype.kind == "U"
+    metadata["is_string_data"] = is_string_data
+
+    if is_string_data and is_zarr_v3:
+        # For string data in Zarr v3, save as NumPy file to avoid warnings
+        metadata["data_dtype"] = str(array.data.dtype)
+
+        if array.is_lazy and HAS_DASK:
+            # For dask arrays, compute first
+            computed_data = array.data.compute()
+            # Convert to bytes array
+            bytes_data = np.array(
+                [str(x).encode("utf-8") for x in computed_data.flatten()], dtype=object
+            )
+        else:
+            # For numpy arrays, convert directly
+            bytes_data = np.array(
+                [str(x).encode("utf-8") for x in array.data.flatten()], dtype=object
+            )
+
+        # Save to NumPy file
+        np_path = os.path.join(path, "data.npy")
+        np.save(np_path, bytes_data)
+    else:
+        # For non-string data or Zarr v2, use zarr directly
+        if array.is_lazy:
+            # Get chunks from Dask array if available
+            chunks = array.data.chunks
+
+            # Store data - dask.array.to_zarr is more efficient for lazy arrays
+            import dask.array as da
+
+            da.to_zarr(
+                array.data,
+                url=path,
+                component="data",
+                overwrite=True,
+                compute=True,
+                return_stored=False,
+                storage_options=None,
+                chunks=chunks,
+            )
+        else:
+            # Store data directly - handle Zarr v2 vs v3 differences
+            if is_zarr_v3:
+                # For Zarr v3
+                if compression == "blosc":
+                    compressors = "auto"
+                else:
+                    compressors = None  # No compression
+
+                data_array = root.create_array(
+                    "data",
+                    shape=array.data.shape,
+                    chunks="auto",  # Always provide a valid chunks value
+                    dtype=array.data.dtype,
+                    compressors=compressors,
+                )
+                # Write the data
+                data_array[:] = array.data
+            else:
+                # For Zarr v2
+                root.create_array("data", data=array.data, compression=compression)
+
+    # Write metadata to JSON file
+    with open(os.path.join(path, "nimblend_metadata.json"), "w") as f:
+        json.dump(metadata, f, indent=2)
 
 
 def from_zarr(
@@ -146,28 +204,113 @@ def from_zarr(
             "Zarr is required for this functionality. Please install it with pip install zarr"
         )
 
-    # Open the Zarr group
-    root = zarr.open_group(path, mode="r")
+    # Load metadata from JSON file
+    metadata_path = os.path.join(path, "nimblend_metadata.json")
 
-    # Load dimensions
-    dims = root.attrs["dims"]
+    if os.path.exists(metadata_path):
+        # New format - load metadata from JSON
+        with open(metadata_path, "r") as f:
+            metadata = json.load(f)
 
-    # Load coordinates
-    coords = {}
-    coords_group = root["coords"]
-    for dim in dims:
-        coords[dim] = coords_group[dim][:]
+        dims = metadata["dims"]
+        name = metadata["name"]
+        is_string_data = metadata.get("is_string_data", False)
 
-    # Load name if it exists
-    name = root.attrs.get("name", None)
+        # Load coordinates
+        coords = {}
+        for dim in dims:
+            dim_metadata = metadata["coords"].get(dim, {})
+            is_string_coord = dim_metadata.get("is_string", False)
 
-    # Determine if we should load as Dask array
-    if chunks is not None and HAS_DASK:
-        import dask.array as da
+            if is_string_coord:
+                # Load from NumPy file
+                np_path = os.path.join(path, f"coords_{dim}.npy")
+                if os.path.exists(np_path):
+                    bytes_data = np.load(np_path, allow_pickle=True)
 
-        data = da.from_zarr(path, component="data", chunks=chunks)
+                    # Convert bytes back to strings
+                    orig_dtype = dim_metadata["dtype"]
+                    orig_shape = tuple(dim_metadata["shape"])
+
+                    # Convert and reshape
+                    string_data = np.array(
+                        [b.decode("utf-8", errors="replace") for b in bytes_data],
+                        dtype=orig_dtype,
+                    )
+                    if len(orig_shape) > 1:
+                        string_data = string_data.reshape(orig_shape)
+
+                    coords[dim] = string_data
+                else:
+                    # Fallback to zarr stored data
+                    coords_group = zarr.open_group(path, mode="r")["coords"]
+                    coords[dim] = coords_group[dim][:]
+            else:
+                # Load from Zarr
+                coords_group = zarr.open_group(path, mode="r")["coords"]
+                coords[dim] = coords_group[dim][:]
+
+        # Load the main data array
+        if is_string_data:
+            # Load string data from NumPy file
+            np_path = os.path.join(path, "data.npy")
+            if os.path.exists(np_path):
+                bytes_data = np.load(np_path, allow_pickle=True)
+
+                # Convert bytes back to strings
+                orig_dtype = metadata["data_dtype"]
+                orig_shape = tuple(metadata["data_shape"])
+
+                # Convert and reshape
+                string_data = np.array(
+                    [b.decode("utf-8", errors="replace") for b in bytes_data],
+                    dtype=orig_dtype,
+                )
+                data = string_data.reshape(orig_shape)
+
+                # Convert to dask if needed
+                if chunks is not None and HAS_DASK:
+                    import dask.array as da
+
+                    data = da.from_array(data, chunks=chunks)
+            else:
+                # Fallback to zarr data
+                if chunks is not None and HAS_DASK:
+                    import dask.array as da
+
+                    data = da.from_zarr(path, component="data", chunks=chunks)
+                else:
+                    data = zarr.open_group(path, mode="r")["data"][:]
+        else:
+            # Load regular data from Zarr
+            if chunks is not None and HAS_DASK:
+                import dask.array as da
+
+                data = da.from_zarr(path, component="data", chunks=chunks)
+            else:
+                data = zarr.open_group(path, mode="r")["data"][:]
     else:
-        # Load as NumPy array
-        data = root["data"][:]
+        # Old format or standard zarr - fall back to previous approach
+        root = zarr.open_group(path, mode="r")
+
+        # Load dimensions from attributes
+        dims = root.attrs["dims"]
+
+        # Load coordinates
+        coords = {}
+        coords_group = root["coords"]
+        for dim in dims:
+            coords[dim] = coords_group[dim][:]
+
+        # Load name if it exists
+        name = root.attrs.get("name", None)
+
+        # Load the data array
+        if chunks is not None and HAS_DASK:
+            import dask.array as da
+
+            data = da.from_zarr(path, component="data", chunks=chunks)
+        else:
+            data = root["data"][:]
 
     return Array(data, coords, dims, name)

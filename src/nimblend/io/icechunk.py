@@ -103,6 +103,82 @@ class _NimbleNdArrayWriter:
         )
         self.zarr_store = root
 
+    def _prepare_string_data(self, data, is_lazy=False):
+        """
+        Prepare string data for storage by converting to bytes.
+        Returns the converted data and whether conversion occurred.
+        """
+        if hasattr(data, "dtype") and data.dtype.kind == "U":
+            # Store the original dtype info
+            data_dtype = str(data.dtype)
+
+            # Handle different array shapes for string conversion
+            if np.isscalar(data) or data.ndim == 0:
+                # For scalar data
+                if is_lazy and HAS_DASK:
+                    # Convert to uint8 array - dask doesn't handle this well,
+                    # so compute first and create a new dask array
+                    string_bytes = str(data).encode("utf-8")
+                    uint8_array = np.frombuffer(string_bytes, dtype=np.uint8)
+                    converted_data = da.from_array(uint8_array, chunks="auto")
+                else:
+                    # For NumPy, directly convert the string to bytes to uint8
+                    string_bytes = str(data).encode("utf-8")
+                    converted_data = np.frombuffer(string_bytes, dtype=np.uint8)
+            else:
+                # For array data
+                if is_lazy and HAS_DASK:
+                    # For dask arrays, compute first
+                    data_computed = data.compute()
+                    # Convert each string to bytes and then to uint8
+                    flat_data = data_computed.flatten()
+                    byte_arrays = []
+                    for item in flat_data:
+                        item_bytes = str(item).encode("utf-8")
+                        byte_arrays.append(np.frombuffer(item_bytes, dtype=np.uint8))
+
+                    # Pad to the same length
+                    max_len = max(len(arr) for arr in byte_arrays) if byte_arrays else 0
+                    padded_arrays = []
+                    for arr in byte_arrays:
+                        padded = np.zeros(max_len, dtype=np.uint8)
+                        padded[: len(arr)] = arr
+                        padded_arrays.append(padded)
+
+                    # Stack arrays along a new axis
+                    stacked = np.stack(padded_arrays)
+                    # Reshape back to original shape plus byte dimension
+                    result_shape = data_computed.shape + (max_len,)
+                    converted_data = stacked.reshape(result_shape)
+                    # Convert back to dask
+                    converted_data = da.from_array(converted_data, chunks="auto")
+                else:
+                    # For NumPy arrays
+                    # Convert each string to bytes and then to uint8
+                    flat_data = data.flatten()
+                    byte_arrays = []
+                    for item in flat_data:
+                        item_bytes = str(item).encode("utf-8")
+                        byte_arrays.append(np.frombuffer(item_bytes, dtype=np.uint8))
+
+                    # Pad to the same length
+                    max_len = max(len(arr) for arr in byte_arrays) if byte_arrays else 0
+                    padded_arrays = []
+                    for arr in byte_arrays:
+                        padded = np.zeros(max_len, dtype=np.uint8)
+                        padded[: len(arr)] = arr
+                        padded_arrays.append(padded)
+
+                    # Stack arrays along a new axis
+                    stacked = np.stack(padded_arrays)
+                    # Reshape back to original shape plus byte dimension
+                    result_shape = data.shape + (max_len,)
+                    converted_data = stacked.reshape(result_shape)
+
+            return converted_data, data_dtype
+
+        return data, None
+
     def write_metadata(self, encoding: Mapping[Any, Any] | None = None) -> None:
         """
         Write metadata and prepare for array writing.
@@ -124,16 +200,23 @@ class _NimbleNdArrayWriter:
 
         # Store coordinates for each dimension
         for dim, coord_values in self.array.coords.items():
+            # Check if coordinates are strings and need conversion
+            coord_values_to_store, coord_dtype = self._prepare_string_data(coord_values)
+
+            # Store original dtype if string conversion was applied
+            if coord_dtype is not None:
+                coords_group.attrs[f"{dim}_dtype"] = coord_dtype
+
             # Create the array for coordinates - always use auto-chunking for Zarr v3
             coord_array = coords_group.create_array(
                 dim,
-                shape=coord_values.shape,
-                dtype=coord_values.dtype,
+                shape=coord_values_to_store.shape,
+                dtype=coord_values_to_store.dtype,
                 chunks="auto",  # Use auto-chunking for Zarr v3
                 compressors="auto",  # Use default compression
             )
             # Write the coordinate data
-            coord_array[:] = coord_values
+            coord_array[:] = coord_values_to_store
 
         # Prepare for data writing
         if encoding is None:
@@ -151,23 +234,32 @@ class _NimbleNdArrayWriter:
         if chunks is None:
             chunks = "auto"
 
+        # Check if data is string type and needs conversion
+        data_to_store, data_dtype = self._prepare_string_data(
+            self.array.data, is_lazy=self.array.is_lazy
+        )
+
+        # Store original dtype if string conversion was applied
+        if data_dtype is not None:
+            self.zarr_store.attrs["data_dtype"] = data_dtype
+
         # Create the data array with Zarr v3 API
         compressors = "auto" if compression == "blosc" else None
 
         data_array = self.zarr_store.create_array(
             "data",
-            shape=self.array.data.shape,
+            shape=data_to_store.shape,
             chunks=chunks,
-            dtype=self.array.data.dtype,
+            dtype=data_to_store.dtype,
             compressors=compressors,
         )
 
         # Determine if the source is a lazy array
         if self.array.is_lazy:
-            self.lazy_sources.append(self.array.data)
+            self.lazy_sources.append(data_to_store)
             self.lazy_targets.append(data_array)
         else:
-            self.eager_sources.append(self.array.data)
+            self.eager_sources.append(data_to_store)
             self.eager_targets.append(data_array)
 
         self._initialized = True
