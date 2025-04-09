@@ -174,3 +174,4 @@ cython_debug/
 .pypirc
 
 .repoai/*.yml
+.repoai/custom_model_config.yaml
