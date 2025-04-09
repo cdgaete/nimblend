@@ -175,3 +175,4 @@ cython_debug/
 
 .repoai/*.yml
 .repoai/custom_model_config.yaml
+examples/*.zarr
