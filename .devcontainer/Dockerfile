@@ -49,5 +49,3 @@ RUN pip install pre-commit ruff mypy jupyter
 
 # Switch to non-root user
 USER $USERNAME
-
-CMD ["jupyter",  "notebook"]
