@@ -1,18 +1,22 @@
 """
 Core classes for NimbleNd with Dask support.
 """
+
+from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar, Union
+
 import numpy as np
-from typing import Dict, List, Union, Tuple, Any, Optional, Callable, TypeVar, cast
 
 # Check for Dask availability
 try:
     import dask.array as da
+
     HAS_DASK = True
 except ImportError:
     HAS_DASK = False
 
 # Type variable for array-like objects
-ArrayLike = TypeVar('ArrayLike', np.ndarray, 'da.Array')
+ArrayLike = TypeVar("ArrayLike", np.ndarray, "da.Array")
+
 
 class CoordinateMap:
     """
@@ -104,7 +108,9 @@ class CoordinateMap:
                 raise ValueError(f"Missing coordinate for dimension '{dim}'")
             mapping = self.get_index_mapping(dim)
             if coords_dict[dim] not in mapping:
-                raise ValueError(f"Coordinate {coords_dict[dim]} not found in dimension '{dim}'")
+                raise ValueError(
+                    f"Coordinate {coords_dict[dim]} not found in dimension '{dim}'"
+                )
             position.append(mapping[coords_dict[dim]])
         return tuple(position)
 
@@ -131,11 +137,11 @@ class Array:
 
     def __init__(
         self,
-        data: Union[np.ndarray, 'da.Array', List, Tuple],
+        data: Union[np.ndarray, "da.Array", List, Tuple],
         coords: Dict[str, np.ndarray],
         dims: Optional[List[str]] = None,
         name: Optional[str] = None,
-        chunks: Optional[Union[str, Tuple[int, ...], Dict[str, int]]] = None
+        chunks: Optional[Union[str, Tuple[int, ...], Dict[str, int]]] = None,
     ):
         """
         Initialize an Array.
@@ -177,13 +183,13 @@ class Array:
 
     def _validate_dims_shape(
         self,
-        data: Union[np.ndarray, 'da.Array', List, Tuple],
+        data: Union[np.ndarray, "da.Array", List, Tuple],
         dims: List[str],
-        coords: Dict[str, np.ndarray]
+        coords: Dict[str, np.ndarray],
     ) -> None:
         """Validate dimensions match data shape."""
         # Get the shape of the data
-        if hasattr(data, 'shape'):
+        if hasattr(data, "shape"):
             shape = data.shape
         else:
             # Convert to numpy array to get shape
@@ -207,11 +213,11 @@ class Array:
 
     def _prepare_data(
         self,
-        data: Union[np.ndarray, 'da.Array', List, Tuple],
+        data: Union[np.ndarray, "da.Array", List, Tuple],
         chunks: Optional[Union[str, Tuple[int, ...], Dict[str, int]]],
         dims: List[str],
-        coords: Dict[str, np.ndarray]
-    ) -> Union[np.ndarray, 'da.Array']:
+        coords: Dict[str, np.ndarray],
+    ) -> Union[np.ndarray, "da.Array"]:
         """Prepare the data array with appropriate chunking."""
         # Check if it's already a Dask array
         if HAS_DASK and isinstance(data, da.Array):
@@ -238,16 +244,14 @@ class Array:
         return array_data
 
     def _compute_chunks(
-        self,
-        shape: Tuple[int, ...],
-        dims: List[str]
+        self, shape: Tuple[int, ...], dims: List[str]
     ) -> Tuple[int, ...]:
         """Compute good chunk sizes based on data shape and dimensions."""
         # Simple heuristic: aim for ~100MB chunks, minimum 1, maximum dimension size
         target_bytes = 100 * 1024 * 1024  # 100 MB
         element_size = 8  # Default to 8 bytes (float64)
 
-        if hasattr(self, 'data') and hasattr(self.data, 'itemsize'):
+        if hasattr(self, "data") and hasattr(self.data, "itemsize"):
             element_size = self.data.itemsize
 
         # Start with a reasonable minimum chunk size
@@ -264,7 +268,7 @@ class Array:
         """Check if the data is a lazy (Dask) array."""
         return HAS_DASK and isinstance(self.data, da.Array)
 
-    def compute(self) -> 'Array':
+    def compute(self) -> "Array":
         """
         Compute a lazy array, returning a new Array with an eager NumPy array.
 
@@ -279,7 +283,7 @@ class Array:
         computed_data = self.data.compute()
         return Array(computed_data, self.coords, self.dims, self.name)
 
-    def persist(self) -> 'Array':
+    def persist(self) -> "Array":
         """
         Persist a lazy array in memory, maintaining the lazy representation.
 
@@ -303,7 +307,9 @@ class Array:
 
     def _repr_html_(self) -> str:
         """HTML representation for Jupyter notebooks."""
-        dims_str = ", ".join(f"<b>{dim}</b>: {self.coords[dim].shape}" for dim in self.dims)
+        dims_str = ", ".join(
+            f"<b>{dim}</b>: {self.coords[dim].shape}" for dim in self.dims
+        )
         name_str = f", name=<b>{self.name}</b>" if self.name else ""
         lazy_str = " <i>(lazy)</i>" if self.is_lazy else ""
 
@@ -311,7 +317,7 @@ class Array:
             "<div>",
             f"<p><b>Array</b>({self.data.shape}){lazy_str}, {{{dims_str}}}{name_str}</p>",
             "<table>",
-            "<tr><th>Dimensions</th><th>Coordinates</th></tr>"
+            "<tr><th>Dimensions</th><th>Coordinates</th></tr>",
         ]
 
         for dim in self.dims:
@@ -337,23 +343,64 @@ class Array:
         html.append("</div>")
         return "".join(html)
 
-    def __getitem__(self, key: Any) -> 'Array':
+    def __getitem__(self, key: Any) -> "Array":
         """Get a subset of the array."""
         if isinstance(key, dict):
             # Dictionary-based indexing by coordinate values
             positions = []
             for dim in self.dims:
                 if dim in key:
-                    positions.append(self.coordinate_map.get_indices(dim, np.atleast_1d(key[dim])))
+                    # Handle different types of indexing
+                    dim_key = key[dim]
+                    if isinstance(dim_key, slice):
+                        # If it's a slice, convert it to indices in the dimension
+                        start = dim_key.start
+                        stop = dim_key.stop
+                        step = dim_key.step
+
+                        # Convert None to actual indices
+                        if start is None:
+                            start = 0
+                        if stop is None:
+                            stop = len(self.coords[dim])
+                        if step is None:
+                            step = 1
+
+                        positions.append(slice(start, stop, step))
+                    elif isinstance(dim_key, (list, np.ndarray)):
+                        # If it's a list or array, get the indices for these values
+                        positions.append(
+                            self.coordinate_map.get_indices(dim, np.atleast_1d(dim_key))
+                        )
+                    else:
+                        # Single value indexing
+                        try:
+                            positions.append(
+                                self.coordinate_map.get_index_mapping(dim)[dim_key]
+                            )
+                        except KeyError:
+                            raise ValueError(
+                                f"Value {dim_key} not found in dimension '{dim}'"
+                            )
                 else:
                     positions.append(slice(None))
+
             new_data = self.data[tuple(positions)]
 
             # Create new coordinates
             new_coords = {}
             for i, dim in enumerate(self.dims):
                 if dim in key:
-                    new_coords[dim] = np.atleast_1d(key[dim])
+                    dim_key = key[dim]
+                    if isinstance(dim_key, slice):
+                        # For slices, get the subset of coordinates
+                        new_coords[dim] = self.coords[dim][dim_key]
+                    elif isinstance(dim_key, (list, np.ndarray)):
+                        # For arrays, get the specific coordinates
+                        new_coords[dim] = np.atleast_1d(dim_key)
+                    else:
+                        # For a single value, use that value
+                        new_coords[dim] = np.array([dim_key])
                 else:
                     new_coords[dim] = self.coords[dim]
 
@@ -416,13 +463,17 @@ class Array:
                 positioned_indices.append([0] * self.data.size)
 
         # Create a meshgrid to get all combinations
-        mesh = np.meshgrid(*positioned_indices, indexing='ij')
+        mesh = np.meshgrid(*positioned_indices, indexing="ij")
         return tuple(m.flatten() for m in mesh)
 
     def _align_with(
-        self,
-        other: 'Array'
-    ) -> Tuple[Union[np.ndarray, 'da.Array'], Union[np.ndarray, 'da.Array'], Dict[str, np.ndarray], List[str]]:
+        self, other: "Array"
+    ) -> Tuple[
+        Union[np.ndarray, "da.Array"],
+        Union[np.ndarray, "da.Array"],
+        Dict[str, np.ndarray],
+        List[str],
+    ]:
         """
         Align this array with another array for operations, preserving laziness if present.
         """
@@ -433,7 +484,9 @@ class Array:
         union_coords = {}
         for dim in all_dims:
             if dim in self.coords and dim in other.coords:
-                union_coords[dim] = np.unique(np.concatenate([self.coords[dim], other.coords[dim]]))
+                union_coords[dim] = np.unique(
+                    np.concatenate([self.coords[dim], other.coords[dim]])
+                )
             elif dim in self.coords:
                 union_coords[dim] = self.coords[dim].copy()
             else:
@@ -472,15 +525,17 @@ class Array:
                 other_indices.append(np.zeros(1, dtype=int))
 
         # Create meshgrids for all combinations of indices
-        self_mesh = np.meshgrid(*self_indices, indexing='ij')
-        other_mesh = np.meshgrid(*other_indices, indexing='ij')
+        self_mesh = np.meshgrid(*self_indices, indexing="ij")
+        other_mesh = np.meshgrid(*other_indices, indexing="ij")
 
         # Create output arrays - either NumPy or Dask
         if use_dask and HAS_DASK:
             # For Dask arrays, create empty arrays with appropriate chunks
             chunks = "auto"  # We could be more sophisticated here
             self_expanded = da.zeros(result_shape, dtype=self.data.dtype, chunks=chunks)
-            other_expanded = da.zeros(result_shape, dtype=other.data.dtype, chunks=chunks)
+            other_expanded = da.zeros(
+                result_shape, dtype=other.data.dtype, chunks=chunks
+            )
 
             # Using the Dask map_blocks approach would be more efficient but complex
             # For simplicity, we'll use a basic approach
@@ -533,71 +588,91 @@ class Array:
 
         return self_expanded, other_expanded, union_coords, all_dims
 
-    def _operation(self, other: Union['Array', np.ndarray, 'da.Array', int, float], op: Callable) -> 'Array':
+    def _operation(
+        self, other: Union["Array", np.ndarray, "da.Array", int, float], op: Callable
+    ) -> "Array":
         """Apply an operation between this array and another array or scalar."""
         if isinstance(other, (int, float, np.number)):
             # Simple operation with a scalar
             result_data = op(self.data, other)
             return Array(result_data, self.coords, self.dims, self.name)
-        elif isinstance(other, np.ndarray) or (HAS_DASK and isinstance(other, da.Array)):
+        elif isinstance(other, np.ndarray) or (
+            HAS_DASK and isinstance(other, da.Array)
+        ):
             # Operation with a raw array - must have compatible shape
             if other.shape != self.data.shape:
-                raise ValueError(f"Incompatible shapes: {self.data.shape} vs {other.shape}")
+                raise ValueError(
+                    f"Incompatible shapes: {self.data.shape} vs {other.shape}"
+                )
             result_data = op(self.data, other)
             return Array(result_data, self.coords, self.dims, self.name)
         elif isinstance(other, Array):
             # Operation with another Array - needs alignment
-            self_aligned, other_aligned, union_coords, all_dims = self._align_with(other)
+            self_aligned, other_aligned, union_coords, all_dims = self._align_with(
+                other
+            )
             result_data = op(self_aligned, other_aligned)
             return Array(result_data, union_coords, all_dims, self.name)
         else:
             raise TypeError(f"Unsupported type for operation: {type(other)}")
 
-    def __add__(self, other: Union['Array', np.ndarray, 'da.Array', int, float]) -> 'Array':
+    def __add__(
+        self, other: Union["Array", np.ndarray, "da.Array", int, float]
+    ) -> "Array":
         """Add this array with another array or scalar."""
         return self._operation(other, lambda x, y: x + y)
 
-    def __sub__(self, other: Union['Array', np.ndarray, 'da.Array', int, float]) -> 'Array':
+    def __sub__(
+        self, other: Union["Array", np.ndarray, "da.Array", int, float]
+    ) -> "Array":
         """Subtract another array or scalar from this array."""
         return self._operation(other, lambda x, y: x - y)
 
-    def __mul__(self, other: Union['Array', np.ndarray, 'da.Array', int, float]) -> 'Array':
+    def __mul__(
+        self, other: Union["Array", np.ndarray, "da.Array", int, float]
+    ) -> "Array":
         """Multiply this array with another array or scalar."""
         return self._operation(other, lambda x, y: x * y)
 
-    def __truediv__(self, other: Union['Array', np.ndarray, 'da.Array', int, float]) -> 'Array':
+    def __truediv__(
+        self, other: Union["Array", np.ndarray, "da.Array", int, float]
+    ) -> "Array":
         """Divide this array by another array or scalar."""
         return self._operation(other, lambda x, y: x / y)
 
-    def __radd__(self, other: Union[np.ndarray, 'da.Array', int, float]) -> 'Array':
+    def __radd__(self, other: Union[np.ndarray, "da.Array", int, float]) -> "Array":
         """Add a scalar or array to this array."""
         return self._operation(other, lambda x, y: y + x)
 
-    def __rsub__(self, other: Union[np.ndarray, 'da.Array', int, float]) -> 'Array':
+    def __rsub__(self, other: Union[np.ndarray, "da.Array", int, float]) -> "Array":
         """Subtract this array from a scalar or array."""
         return self._operation(other, lambda x, y: y - x)
 
-    def __rmul__(self, other: Union[np.ndarray, 'da.Array', int, float]) -> 'Array':
+    def __rmul__(self, other: Union[np.ndarray, "da.Array", int, float]) -> "Array":
         """Multiply a scalar or array with this array."""
         return self._operation(other, lambda x, y: y * x)
 
-    def __rtruediv__(self, other: Union[np.ndarray, 'da.Array', int, float]) -> 'Array':
+    def __rtruediv__(self, other: Union[np.ndarray, "da.Array", int, float]) -> "Array":
         """Divide a scalar or array by this array."""
         return self._operation(other, lambda x, y: y / x)
 
-    def __neg__(self) -> 'Array':
+    def __neg__(self) -> "Array":
         """Negate this array."""
         return Array(-self.data, self.coords, self.dims, self.name)
 
-    def __pow__(self, other: Union['Array', np.ndarray, 'da.Array', int, float]) -> 'Array':
+    def __pow__(
+        self, other: Union["Array", np.ndarray, "da.Array", int, float]
+    ) -> "Array":
         """Raise this array to the power of another array or scalar."""
-        return self._operation(other, lambda x, y: x ** y)
+        return self._operation(other, lambda x, y: x**y)
 
-    def __rpow__(self, other: Union[np.ndarray, 'da.Array', int, float]) -> 'Array':
+    def __rpow__(self, other: Union[np.ndarray, "da.Array", int, float]) -> "Array":
         """Raise a scalar or array to the power of this array."""
-        return self._operation(other, lambda x, y: y ** x)
+        return self._operation(other, lambda x, y: y**x)
 
-    def sum(self, dim: Optional[Union[str, List[str]]] = None, keepdims: bool = False) -> 'Array':
+    def sum(
+        self, dim: Optional[Union[str, List[str]]] = None, keepdims: bool = False
+    ) -> "Array":
         """
         Sum array elements along specified dimensions.
 
@@ -617,12 +692,19 @@ class Array:
             # Sum over all dimensions
             result = np.sum(self.data) if not self.is_lazy else self.data.sum()
             if keepdims:
-                result_data = np.array([[result]]) if not self.is_lazy else da.array([[result]])
+                result_data = (
+                    np.array([[result]]) if not self.is_lazy else da.array([[result]])
+                )
                 result_coords = {dim: [0] for dim in self.dims}
                 return Array(result_data, result_coords, self.dims, self.name)
             else:
                 # Return a scalar - wrapped as 0-dimensional array
-                return Array(np.array(result) if not self.is_lazy else da.array(result), {}, [], self.name)
+                return Array(
+                    np.array(result) if not self.is_lazy else da.array(result),
+                    {},
+                    [],
+                    self.name,
+                )
 
         if isinstance(dim, str):
             dim = [dim]
@@ -631,13 +713,18 @@ class Array:
         axes = [self.dims.index(d) for d in dim]
 
         # Apply sum
-        result_data = np.sum(self.data, axis=tuple(axes), keepdims=keepdims) \
-                      if not self.is_lazy \
-                      else self.data.sum(axis=tuple(axes), keepdims=keepdims)
+        result_data = (
+            np.sum(self.data, axis=tuple(axes), keepdims=keepdims)
+            if not self.is_lazy
+            else self.data.sum(axis=tuple(axes), keepdims=keepdims)
+        )
 
         # Create new coordinates and dimensions
         if keepdims:
-            new_coords = {d: np.array([0]) if d in dim else self.coords[d].copy() for d in self.dims}
+            new_coords = {
+                d: np.array([0]) if d in dim else self.coords[d].copy()
+                for d in self.dims
+            }
             new_dims = self.dims.copy()
         else:
             new_coords = {d: self.coords[d].copy() for d in self.dims if d not in dim}
@@ -645,7 +732,9 @@ class Array:
 
         return Array(result_data, new_coords, new_dims, self.name)
 
-    def to_dask(self, chunks: Optional[Union[str, Tuple[int, ...], Dict[str, int]]] = "auto") -> 'Array':
+    def to_dask(
+        self, chunks: Optional[Union[str, Tuple[int, ...], Dict[str, int]]] = "auto"
+    ) -> "Array":
         """
         Convert to a lazy Dask array.
 
@@ -674,7 +763,7 @@ class Array:
         dask_data = da.from_array(self.data, chunks=chunks)
         return Array(dask_data, self.coords, self.dims, self.name)
 
-    def to_numpy(self) -> 'Array':
+    def to_numpy(self) -> "Array":
         """
         Convert to an eager NumPy array.
 

@@ -148,11 +148,13 @@ def _from_polars_series(
     series: "pl.Series", dims: Optional[List[str]], value_name: str
 ) -> Array:
     """Convert a polars Series to a NimbleNd Array."""
-    # For polars, we assume the series is one column of a DataFrame
-    # with dimension values in other columns. We need to get the parent DataFrame.
+    # For polars, we need to get the parent DataFrame
     if not hasattr(series, "_df"):
+        # If the Series isn't part of a DataFrame with dimensional coordinates,
+        # we need to raise an error with better guidance
         raise ValueError(
-            "The polars Series must be a column of a DataFrame to extract dimensional coordinates"
+            "The polars Series must be a column of a DataFrame to extract dimensional coordinates. "
+            "Please ensure the Series is selected from a DataFrame containing dimension columns."
         )
 
     df = series._df
@@ -161,13 +163,19 @@ def _from_polars_series(
     # If dimensions not specified, use all columns except the value column
     if dims is None:
         dims = [col for col in df.columns if col != series_name]
+        if not dims:
+            raise ValueError(
+                "No dimension columns found in the DataFrame. "
+                "Please specify dimensions explicitly using the 'dims' parameter."
+            )
 
     # Get unique values for each dimension
     unique_coords = {}
     for dim_name in dims:
         if dim_name not in df.columns:
             raise ValueError(
-                f"Dimension '{dim_name}' not found in the DataFrame columns"
+                f"Dimension '{dim_name}' not found in the DataFrame columns. "
+                f"Available columns: {df.columns}"
             )
 
         # Get unique values for this dimension
@@ -211,9 +219,17 @@ def _from_polars_series(
             if pd.isna(row[series_name]) and not np.issubdtype(dtype, np.inexact):
                 continue
 
+            # Make sure all dimensions exist in the row
+            if not all(dim in row for dim in dims):
+                continue
+
             # Get positions for each dimension
-            positions = tuple(position_maps[dim][row[dim]] for dim in dims)
-            data[positions] = row[series_name]
+            try:
+                positions = tuple(position_maps[dim][row[dim]] for dim in dims)
+                data[positions] = row[series_name]
+            except KeyError:
+                # Skip rows with dimension values not in our unique sets
+                continue
     else:
         # Fallback for when pandas is not available
         for row in df.iter_rows(named=True):
@@ -221,9 +237,17 @@ def _from_polars_series(
             if row[series_name] is None and not np.issubdtype(dtype, np.inexact):
                 continue
 
+            # Make sure all dimensions exist in the row
+            if not all(dim in row for dim in dims):
+                continue
+
             # Get positions for each dimension
-            positions = tuple(position_maps[dim][row[dim]] for dim in dims)
-            data[positions] = row[series_name]
+            try:
+                positions = tuple(position_maps[dim][row[dim]] for dim in dims)
+                data[positions] = row[series_name]
+            except KeyError:
+                # Skip rows with dimension values not in our unique sets
+                continue
 
     return Array(data, unique_coords, dims, value_name)
 

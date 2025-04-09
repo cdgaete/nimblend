@@ -3,7 +3,18 @@ IceChunk integration for NimbleNd arrays.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Hashable, List, Literal, Mapping, MutableMapping
+from typing import (
+    Any,
+    Dict,
+    Hashable,
+    List,
+    Literal,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Tuple,
+    Union,
+)
 
 import numpy as np
 from packaging.version import Version
@@ -400,3 +411,135 @@ def to_icechunk(
         writer.write_lazy(
             chunkmanager_store_kwargs=chunkmanager_store_kwargs, split_every=split_every
         )
+
+
+def from_icechunk(
+    session: Any,  # Session type
+    *,
+    group: str | None = None,
+    chunks: Optional[Union[str, Dict[str, int], Tuple[int, ...]]] = None,
+) -> Array:
+    """
+    Read a NimbleNd Array from an IceChunk store.
+
+    Parameters
+    ----------
+    session : Session
+        IceChunk Session
+    group : str | None, optional
+        Group path in the store
+    chunks : Optional[Union[str, Dict[str, int], Tuple[int, ...]]], optional
+        Chunks to use when loading the array. If provided and dask is available,
+        will return a lazy array with these chunks. If None, returns an eager NumPy array.
+
+    Returns
+    -------
+    Array
+        The loaded array
+    """
+    if not HAS_ICECHUNK:
+        raise ImportError(
+            "IceChunk is required for this functionality. Please install it with pip install icechunk"
+        )
+
+    import zarr
+
+    # Open the zarr store from the session
+    store = session.store
+    root = zarr.open_group(
+        store=store,
+        path=group or "/",
+        mode="r",
+    )
+
+    # Load dimensions and name from attributes
+    dims = root.attrs["dims"]
+    name = root.attrs.get("name", None)
+
+    # Load data (potentially as a lazy Dask array)
+    if chunks is not None and HAS_DASK:
+        import dask.array as da
+
+        component_path = f"{group}/data" if group else "data"
+        data = da.from_zarr(store, component=component_path, chunks=chunks)
+    else:
+        data = root["data"][:]
+
+    # Check if data was stored as strings
+    if "data_dtype" in root.attrs:
+        original_dtype = root.attrs["data_dtype"]
+        if original_dtype.startswith("<U") or original_dtype.startswith("|U"):
+            # Convert uint8 data back to strings
+            if data.ndim > 1 and data.shape[-1] > 0:
+                # Multi-dimensional string array
+                flat_shape = data.shape[:-1]
+                byte_dim = data.shape[-1]
+
+                # Reshape to 2D for processing
+                reshaped = data.reshape(-1, byte_dim)
+
+                # Convert each byte array back to string
+                strings = []
+                for i in range(reshaped.shape[0]):
+                    # Find non-zero bytes
+                    mask = reshaped[i] != 0
+                    if np.any(mask):
+                        bytes_array = reshaped[i][mask].tobytes()
+                        strings.append(bytes_array.decode("utf-8", errors="replace"))
+                    else:
+                        strings.append("")
+
+                # Reshape back to original dimensions
+                string_array = np.array(strings, dtype=original_dtype).reshape(
+                    flat_shape
+                )
+                data = string_array
+            else:
+                # Scalar or 1D string
+                if np.any(data != 0):
+                    string_val = data.tobytes().decode("utf-8", errors="replace")
+                    data = np.array(string_val, dtype=original_dtype)
+                else:
+                    data = np.array("", dtype=original_dtype)
+
+    # Load coordinates
+    coords = {}
+    coords_group = root["coords"]
+
+    for dim in dims:
+        # Check if this dimension had string coordinates
+        dim_dtype = coords_group.attrs.get(f"{dim}_dtype", None)
+
+        # Load coordinates directly from Zarr - there's no path attribute to check
+        # for separate .npy files in IcechunkStore
+        coord_values = coords_group[dim][:]
+
+        # Check if these were string coordinates
+        if dim_dtype is not None and (
+            dim_dtype.startswith("<U") or dim_dtype.startswith("|U")
+        ):
+            # Convert uint8 data back to strings
+            if coord_values.ndim > 1 and coord_values.shape[-1] > 0:
+                # Multi-dimensional string array
+                flat_shape = coord_values.shape[:-1]
+                byte_dim = coord_values.shape[-1]
+
+                # Reshape to 2D for processing
+                reshaped = coord_values.reshape(-1, byte_dim)
+
+                # Convert each byte array back to string
+                strings = []
+                for i in range(reshaped.shape[0]):
+                    mask = reshaped[i] != 0
+                    if np.any(mask):
+                        bytes_array = reshaped[i][mask].tobytes()
+                        strings.append(bytes_array.decode("utf-8", errors="replace"))
+                    else:
+                        strings.append("")
+
+                # Reshape back to original dimensions
+                coord_values = np.array(strings, dtype=dim_dtype).reshape(flat_shape)
+
+        coords[dim] = coord_values
+
+    return Array(data, coords, dims, name)
