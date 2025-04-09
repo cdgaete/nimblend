@@ -1,8 +1,11 @@
 """
 Zarr storage support for NimbleNd arrays.
 """
-from typing import Dict, Optional, Union, Tuple
-from ..core import Array, HAS_DASK
+
+from typing import Dict, Optional, Tuple, Union
+
+from ..core import HAS_DASK, Array
+
 
 def to_zarr(
     array: Array,
@@ -28,13 +31,16 @@ def to_zarr(
         Separator for dimension coordinates (default: "/")
     """
     try:
-        import zarr
         # Check Zarr version to handle API differences
         import pkg_resources
+        import zarr
+
         zarr_version = pkg_resources.get_distribution("zarr").version
         is_zarr_v3 = zarr_version.startswith("3.")
     except ImportError:
-        raise ImportError("Zarr is required for this functionality. Please install it with pip install zarr")
+        raise ImportError(
+            "Zarr is required for this functionality. Please install it with pip install zarr"
+        )
 
     # Create a Zarr group
     root = zarr.open_group(path, mode=mode)
@@ -46,15 +52,16 @@ def to_zarr(
 
         # Store data - dask.array.to_zarr is more efficient for lazy arrays
         import dask.array as da
+
         da.to_zarr(
             array.data,
             url=path,
-            component='data',
+            component="data",
             overwrite=True,
             compute=True,
             return_stored=False,
             storage_options=None,
-            chunks=chunks
+            chunks=chunks,
         )
     else:
         # Store data directly - handle Zarr v2 vs v3 differences
@@ -66,30 +73,26 @@ def to_zarr(
                 compressors = "auto"
             else:
                 compressors = None  # No compression
-            
+
             # Create the array with automatic chunking if none specified
             data_array = root.create_array(
-                'data',
+                "data",
                 shape=array.data.shape,
                 chunks="auto",  # Always provide a valid chunks value
                 dtype=array.data.dtype,
-                compressors=compressors
+                compressors=compressors,
             )
             # Write the data
             data_array[:] = array.data
         else:
             # For Zarr v2
-            root.create_dataset(
-                'data',
-                data=array.data,
-                compression=compression
-            )
+            root.create_array("data", data=array.data, compression=compression)
 
     # Store dimensions
-    root.attrs['dims'] = array.dims
+    root.attrs["dims"] = array.dims
 
     # Store coordinates for each dimension
-    coords_group = root.create_group('coords')
+    coords_group = root.create_group("coords")
     for dim, coord_values in array.coords.items():
         if is_zarr_v3:
             # For Zarr v3
@@ -97,14 +100,14 @@ def to_zarr(
                 compressors = "auto"
             else:
                 compressors = None
-            
+
             # Create the array for coordinates - always specify chunks explicitly
             coord_array = coords_group.create_array(
                 dim,
                 shape=coord_values.shape,
                 dtype=coord_values.dtype,
                 chunks="auto",  # Always use auto-chunking to avoid None
-                compressors=compressors
+                compressors=compressors,
             )
             # Write the coordinate data
             coord_array[:] = coord_values
@@ -114,10 +117,12 @@ def to_zarr(
 
     # Store array name if it exists
     if array.name is not None:
-        root.attrs['name'] = array.name
+        root.attrs["name"] = array.name
 
 
-def from_zarr(path: str, chunks: Optional[Union[str, Dict[str, int], Tuple[int, ...]]] = None) -> Array:
+def from_zarr(
+    path: str, chunks: Optional[Union[str, Dict[str, int], Tuple[int, ...]]] = None
+) -> Array:
     """
     Load a NimbleNd array from Zarr format.
 
@@ -137,29 +142,32 @@ def from_zarr(path: str, chunks: Optional[Union[str, Dict[str, int], Tuple[int, 
     try:
         import zarr
     except ImportError:
-        raise ImportError("Zarr is required for this functionality. Please install it with pip install zarr")
+        raise ImportError(
+            "Zarr is required for this functionality. Please install it with pip install zarr"
+        )
 
     # Open the Zarr group
-    root = zarr.open_group(path, mode='r')
+    root = zarr.open_group(path, mode="r")
 
     # Load dimensions
-    dims = root.attrs['dims']
+    dims = root.attrs["dims"]
 
     # Load coordinates
     coords = {}
-    coords_group = root['coords']
+    coords_group = root["coords"]
     for dim in dims:
         coords[dim] = coords_group[dim][:]
 
     # Load name if it exists
-    name = root.attrs.get('name', None)
+    name = root.attrs.get("name", None)
 
     # Determine if we should load as Dask array
     if chunks is not None and HAS_DASK:
         import dask.array as da
-        data = da.from_zarr(path, component='data', chunks=chunks)
+
+        data = da.from_zarr(path, component="data", chunks=chunks)
     else:
         # Load as NumPy array
-        data = root['data'][:]
+        data = root["data"][:]
 
     return Array(data, coords, dims, name)
