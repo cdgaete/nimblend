@@ -745,15 +745,18 @@ class Array:
         # Create and return the new array
         return Array(result_data, new_coords, self.dims, self.name)
 
-    def __getitem__(self, key: Union[Dict[str, Any], Tuple, List]) -> "Array":
+    def __getitem__(self, key: Dict[str, Any]) -> "Array":
         """
-        Get item or slice from the array using either dimension names or indices.
+        Get item or slice from the array using dimension names.
+
+        This method provides a convenient wrapper around the shrink method,
+        allowing for more intuitive dictionary-based indexing.
 
         Parameters
         ----------
-        key : Union[Dict[str, Any], Tuple, List]
-            If a dict, the keys are dimension names and values are coordinates or slices.
-            If a tuple or list, treated as a positional index or slice for each dimension.
+        key : Dict[str, Any]
+            Dictionary where keys are dimension names and values are coordinates to select.
+            Values can be single items (str, int, float) or sequences of coordinates.
 
         Returns
         -------
@@ -764,13 +767,29 @@ class Array:
         --------
         >>> arr = Array(np.ones((2, 3)), {"x": ["a", "b"], "y": [1, 2, 3]})
         >>> # Select by dimension name
-        >>> arr[{"x": "a", "y": slice(0, 2)}]
-        >>> # Select by position
-        >>> arr[0, 0:2]
+        >>> arr[{"x": "a"}]  # Select just the "a" coordinate from x dimension
+        >>> # Select multiple coordinates
+        >>> arr[{"x": ["a", "b"], "y": [1, 3]}]  # Select specific coordinates
         """
-        # Handle dictionaries for dimension-based indexing
-        if isinstance(key, dict):
-            return self.shrink(key)
-        else:
-            # Not implemented yet
-            raise NotImplementedError
+        if not isinstance(key, dict):
+            raise TypeError("Indexing only supports dictionary input")
+
+        # Prepare a dictionary to pass to shrink
+        # Convert single values (string, int, float) to lists
+        shrink_dict = {}
+        for dim, val in key.items():
+            if dim not in self.dims:
+                raise ValueError(f"Dimension '{dim}' not found in array dimensions")
+
+            if isinstance(val, (str, int, float)):
+                # Single value - convert to a list with one element
+                shrink_dict[dim] = [val]
+            elif isinstance(val, (list, tuple, np.ndarray)):
+                # Already a sequence or other type
+                shrink_dict[dim] = val
+            else:
+                raise TypeError(
+                    f"Unsupported type for dimension '{dim}': {type(val).__name__}"
+                )
+
+        return self.shrink(shrink_dict)
