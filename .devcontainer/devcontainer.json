@@ -17,7 +17,8 @@
                 "charliermarsh.ruff",
                 "ms-azuretools.vscode-docker",
                 "daiyy.quick-html-previewer",
-                "github.vscode-github-actions"
+                "github.vscode-github-actions",
+                "Codeium.codeium"
             ],
             "settings": {
                 "python.defaultInterpreterPath": "/usr/local/bin/python",

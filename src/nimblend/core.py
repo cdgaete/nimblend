@@ -663,3 +663,114 @@ class Array:
             return self
 
         return self.compute()
+
+    def shrink(self, dims_coords: Dict[str, Union[List, np.ndarray]]) -> "Array":
+        """
+        Reduce the size of the array by selecting coordinates along specified dimensions.
+
+        Parameters
+        ----------
+        dims_coords : Dict[str, Union[List, np.ndarray]]
+            Dictionary mapping dimension names to the coordinates to keep.
+
+        Returns
+        -------
+        Array
+            A new array with reduced size.
+
+        Examples
+        --------
+        >>> array = Array(np.arange(12).reshape(3, 4),
+        ...               {"x": ["a", "b", "c"], "y": [10, 20, 30, 40]})
+        >>> smaller = array.shrink({"x": ["a", "c"], "y": [10, 40]})
+        >>> smaller.data.shape
+        (2, 2)
+        """
+        if not dims_coords:
+            return self
+
+        # Make a copy of current coords for the result
+        new_coords = {dim: coord.copy() for dim, coord in self.coords.items()}
+
+        # Process each dimension and build new coordinates
+        dim_indices = {}
+        for dim, coords_to_keep in dims_coords.items():
+            if dim not in self.dims:
+                raise ValueError(f"Dimension '{dim}' not found in array dimensions")
+
+            # Convert coordinates to keep to an array for consistent handling
+            coords_to_keep = np.asarray(coords_to_keep)
+
+            # Get the indices of the coordinates to keep
+            dim_map = self.coordinate_map.get_index_mapping(dim)
+            indices = np.array([dim_map.get(coord, -1) for coord in coords_to_keep])
+
+            # Check if any coordinates weren't found
+            if np.any(indices == -1):
+                missing = [c for c, idx in zip(coords_to_keep, indices) if idx == -1]
+                raise ValueError(
+                    f"Coordinates {missing} not found in dimension '{dim}'"
+                )
+
+            # Sort indices to maintain original order
+            indices.sort()
+
+            # Update coordinates for this dimension
+            new_coords[dim] = self.coords[dim][indices]
+
+            # Store indices for this dimension
+            dim_indices[dim] = indices
+
+        # For each dimension that we want to subset, create a selection
+        # We need to use a sequential approach rather than trying to do all dimensions at once
+        result_data = self.data
+
+        # First, make a copy of the data if using numpy (for dask this is handled differently)
+        if not self.is_lazy:
+            result_data = result_data.copy()
+
+        # Apply selections for each dimension one at a time
+        for dim_idx, dim in enumerate(self.dims):
+            if dim in dim_indices:
+                # We need to create a tuple of slices with exactly one array of indices
+                selection = [slice(None)] * len(self.dims)
+                selection[dim_idx] = dim_indices[dim]
+
+                # Apply this selection
+                if self.is_lazy and HAS_DASK:
+                    result_data = result_data[tuple(selection)]
+                else:
+                    result_data = result_data[tuple(selection)]
+
+        # Create and return the new array
+        return Array(result_data, new_coords, self.dims, self.name)
+
+    def __getitem__(self, key: Union[Dict[str, Any], Tuple, List]) -> "Array":
+        """
+        Get item or slice from the array using either dimension names or indices.
+
+        Parameters
+        ----------
+        key : Union[Dict[str, Any], Tuple, List]
+            If a dict, the keys are dimension names and values are coordinates or slices.
+            If a tuple or list, treated as a positional index or slice for each dimension.
+
+        Returns
+        -------
+        Array
+            A new array with the selected data.
+
+        Examples
+        --------
+        >>> arr = Array(np.ones((2, 3)), {"x": ["a", "b"], "y": [1, 2, 3]})
+        >>> # Select by dimension name
+        >>> arr[{"x": "a", "y": slice(0, 2)}]
+        >>> # Select by position
+        >>> arr[0, 0:2]
+        """
+        # Handle dictionaries for dimension-based indexing
+        if isinstance(key, dict):
+            return self.shrink(key)
+        else:
+            # Not implemented yet
+            raise NotImplementedError
