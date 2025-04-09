@@ -247,13 +247,6 @@ class Array:
         self, shape: Tuple[int, ...], dims: List[str]
     ) -> Tuple[int, ...]:
         """Compute good chunk sizes based on data shape and dimensions."""
-        # Simple heuristic: aim for ~100MB chunks, minimum 1, maximum dimension size
-        target_bytes = 100 * 1024 * 1024  # 100 MB
-        element_size = 8  # Default to 8 bytes (float64)
-
-        if hasattr(self, "data") and hasattr(self.data, "itemsize"):
-            element_size = self.data.itemsize
-
         # Start with a reasonable minimum chunk size
         chunk_sizes = []
         for i, dim_size in enumerate(shape):
@@ -300,28 +293,50 @@ class Array:
 
     def __repr__(self) -> str:
         """String representation of the array."""
-        dims_str = ", ".join(f"'{dim}': {self.coords[dim].shape}" for dim in self.dims)
-        name_str = f", name='{self.name}'" if self.name else ""
+        # Build dimensions string without curly braces
+        dims_parts = []
+        for dim in self.dims:
+            dims_parts.append("'{}': {}".format(dim, self.coords[dim].shape))
+        dims_str = ", ".join(dims_parts)
+
+        name_str = ""
+        if self.name:
+            name_str = ", name='{}'".format(self.name)
+
         lazy_str = " (lazy)" if self.is_lazy else ""
-        return f"Array({self.data.shape}{lazy_str}, {{{dims_str}}}{name_str})"
+
+        # Using parentheses instead of curly braces for the dimensions section
+        return "Array({}{}, [{}]{})".format(
+            self.data.shape, lazy_str, dims_str, name_str
+        )
 
     def _repr_html_(self) -> str:
         """HTML representation for Jupyter notebooks."""
-        dims_str = ", ".join(
-            f"<b>{dim}</b>: {self.coords[dim].shape}" for dim in self.dims
-        )
-        name_str = f", name=<b>{self.name}</b>" if self.name else ""
+        # Build dimensions string without curly braces
+        dims_parts = []
+        for dim in self.dims:
+            dims_parts.append("<b>{}</b>: {}".format(dim, self.coords[dim].shape))
+        dims_str = ", ".join(dims_parts)
+
+        name_str = ""
+        if self.name:
+            name_str = ", name=<b>{}</b>".format(self.name)
+
         lazy_str = " <i>(lazy)</i>" if self.is_lazy else ""
 
         html = [
             "<div>",
-            f"<p><b>Array</b>({self.data.shape}){lazy_str}, {{{dims_str}}}{name_str}</p>",
+            # Using square brackets instead of curly braces for the dimensions section
+            "<p><b>Array</b>({}){}, [{}]{}</p>".format(
+                self.data.shape, lazy_str, dims_str, name_str
+            ),
             "<table>",
             "<tr><th>Dimensions</th><th>Coordinates</th></tr>",
         ]
 
         for dim in self.dims:
-            html.append(f"<tr><td>{dim}</td><td>{self.coords[dim][:10]}")
+            coord_row = "<tr><td>{}</td><td>{}".format(dim, self.coords[dim][:10])
+            html.append(coord_row)
             if len(self.coords[dim]) > 10:
                 html.append("...")
             html.append("</td></tr>")
@@ -342,129 +357,6 @@ class Array:
 
         html.append("</div>")
         return "".join(html)
-
-    def __getitem__(self, key: Any) -> "Array":
-        """Get a subset of the array."""
-        if isinstance(key, dict):
-            # Dictionary-based indexing by coordinate values
-            positions = []
-            for dim in self.dims:
-                if dim in key:
-                    # Handle different types of indexing
-                    dim_key = key[dim]
-                    if isinstance(dim_key, slice):
-                        # If it's a slice, convert it to indices in the dimension
-                        start = dim_key.start
-                        stop = dim_key.stop
-                        step = dim_key.step
-
-                        # Convert None to actual indices
-                        if start is None:
-                            start = 0
-                        if stop is None:
-                            stop = len(self.coords[dim])
-                        if step is None:
-                            step = 1
-
-                        positions.append(slice(start, stop, step))
-                    elif isinstance(dim_key, (list, np.ndarray)):
-                        # If it's a list or array, get the indices for these values
-                        positions.append(
-                            self.coordinate_map.get_indices(dim, np.atleast_1d(dim_key))
-                        )
-                    else:
-                        # Single value indexing
-                        try:
-                            positions.append(
-                                self.coordinate_map.get_index_mapping(dim)[dim_key]
-                            )
-                        except KeyError:
-                            raise ValueError(
-                                f"Value {dim_key} not found in dimension '{dim}'"
-                            )
-                else:
-                    positions.append(slice(None))
-
-            new_data = self.data[tuple(positions)]
-
-            # Create new coordinates
-            new_coords = {}
-            for i, dim in enumerate(self.dims):
-                if dim in key:
-                    dim_key = key[dim]
-                    if isinstance(dim_key, slice):
-                        # For slices, get the subset of coordinates
-                        new_coords[dim] = self.coords[dim][dim_key]
-                    elif isinstance(dim_key, (list, np.ndarray)):
-                        # For arrays, get the specific coordinates
-                        new_coords[dim] = np.atleast_1d(dim_key)
-                    else:
-                        # For a single value, use that value
-                        new_coords[dim] = np.array([dim_key])
-                else:
-                    new_coords[dim] = self.coords[dim]
-
-            return Array(new_data, new_coords, self.dims, self.name)
-        else:
-            # Standard NumPy indexing
-            if not isinstance(key, tuple):
-                key = (key,)
-
-            # Extend key to match dimensions
-            key = key + (slice(None),) * (len(self.dims) - len(key))
-
-            # Apply indexing
-            new_data = self.data[key]
-
-            # Create new coordinates
-            new_coords = {}
-            new_dims = []
-
-            for i, (dim, k) in enumerate(zip(self.dims, key)):
-                if isinstance(k, slice):
-                    # Slice indexing
-                    new_coords[dim] = self.coords[dim][k]
-                    new_dims.append(dim)
-                elif isinstance(k, (list, np.ndarray)):
-                    # Fancy indexing
-                    new_coords[dim] = self.coords[dim][k]
-                    new_dims.append(dim)
-                elif isinstance(k, int):
-                    # Integer indexing - dimension is dropped
-                    pass
-                else:
-                    raise TypeError(f"Unsupported indexing type: {type(k)}")
-
-            return Array(new_data, new_coords, new_dims, self.name)
-
-    def _get_indices_in_aligned_array(self, union_coords, all_dims):
-        """Get indices for this array in an aligned result array with the given coordinates."""
-        # For each dimension, find where this array's coordinates map to in the union
-        positioned_indices = []
-
-        for dim in all_dims:
-            if dim in self.dims:
-                # Find the positions of this dimension's coordinates in the union coordinates
-                dim_map = {val: i for i, val in enumerate(union_coords[dim])}
-                self_indices = [dim_map[val] for val in self.coords[dim]]
-
-                # Now we need to broadcast these indices to match the full shape
-                # This is complex and depends on the dimension order
-                # For now, we'll use a simplified approach
-
-                # Get the shape of the dimension in the original array
-                dim_idx = self.dims.index(dim)
-                dim_shape = self.data.shape[dim_idx]
-
-                # Create the indices for this dimension
-                positioned_indices.append(self_indices)
-            else:
-                # This dimension doesn't exist in self - use 0s
-                positioned_indices.append([0] * self.data.size)
-
-        # Create a meshgrid to get all combinations
-        mesh = np.meshgrid(*positioned_indices, indexing="ij")
-        return tuple(m.flatten() for m in mesh)
 
     def _align_with(
         self, other: "Array"
@@ -508,7 +400,6 @@ class Array:
 
             if dim in self.dims:
                 # Map self coordinates to positions in union
-                self_dim_idx = self.dims.index(dim)
                 self_dim_indices = [dim_map[val] for val in self.coords[dim]]
                 self_indices.append(self_dim_indices)
             else:
@@ -517,7 +408,6 @@ class Array:
 
             if dim in other.dims:
                 # Map other coordinates to positions in union
-                other_dim_idx = other.dims.index(dim)
                 other_dim_indices = [dim_map[val] for val in other.coords[dim]]
                 other_indices.append(other_dim_indices)
             else:
@@ -660,15 +550,12 @@ class Array:
         """Negate this array."""
         return Array(-self.data, self.coords, self.dims, self.name)
 
-    def __pow__(
-        self, other: Union["Array", np.ndarray, "da.Array", int, float]
-    ) -> "Array":
+    def __pow__(self, other: Union[int, float]) -> "Array":
         """Raise this array to the power of another array or scalar."""
-        return self._operation(other, lambda x, y: x**y)
-
-    def __rpow__(self, other: Union[np.ndarray, "da.Array", int, float]) -> "Array":
-        """Raise a scalar or array to the power of this array."""
-        return self._operation(other, lambda x, y: y**x)
+        if isinstance(other, (int, float)):
+            return self._operation(other, lambda x, y: x**y)
+        else:
+            raise Exception("Not implemented")
 
     def sum(
         self, dim: Optional[Union[str, List[str]]] = None, keepdims: bool = False

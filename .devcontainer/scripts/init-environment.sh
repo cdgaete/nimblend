@@ -11,6 +11,7 @@ cd /workspaces/nimblend
 # Install the package in development mode with all extras
 echo "Installing package in development mode..."
 pip install -e '.[all]'
+pip install karray
 
 # Install pre-commit hooks
 echo "Setting up pre-commit hooks..."

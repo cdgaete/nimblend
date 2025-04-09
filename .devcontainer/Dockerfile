@@ -12,10 +12,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     build-essential \
     libopenblas-dev \
-    libgeos-dev \
-    libproj-dev \
-    libhdf5-dev \
-    libspatialindex-dev \
     curl \
     vim \
     less \
