@@ -1,6 +1,6 @@
 openai:
   openai/gpt-4o-mini-2024-07-18:
-    input_tokens: 15498
-    output_tokens: 442
-    total_cost: 0.0025899
-    total_tokens: 15940
+    input_tokens: 29796
+    output_tokens: 1691
+    total_cost: 0.005483999999999999
+    total_tokens: 31487
