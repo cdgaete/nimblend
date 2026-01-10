@@ -807,3 +807,62 @@ class Array:
             self.name,
         )
         return self + zeros
+
+    def fillna(self, value: Union[int, float]) -> "Array":
+        """
+        Replace NaN values with a specified value.
+
+        Parameters
+        ----------
+        value : int or float
+            Value to replace NaN with.
+
+        Returns
+        -------
+        Array
+            Array with NaN values replaced.
+
+        Examples
+        --------
+        >>> arr.fillna(0)  # Replace NaN with 0
+        """
+        result_data = np.where(np.isnan(self.data), value, self.data)
+        return Array(result_data, self.coords, self.dims, self.name)
+
+    def dropna(self, dim: str) -> "Array":
+        """
+        Remove coordinates with NaN values along a dimension.
+
+        Parameters
+        ----------
+        dim : str
+            Dimension along which to drop coordinates containing NaN.
+
+        Returns
+        -------
+        Array
+            Array with NaN-containing slices removed.
+
+        Examples
+        --------
+        >>> arr.dropna('x')  # Drop x coords where any value is NaN
+        """
+        if dim not in self.dims:
+            raise KeyError(
+                f"Dimension '{dim}' not found. Available dimensions: {self.dims}"
+            )
+
+        axis = self.dims.index(dim)
+        # Find which indices along dim have any NaN
+        # Move target axis to first, reshape to 2D, check for NaN in each slice
+        other_axes = tuple(i for i in range(self.data.ndim) if i != axis)
+        nan_mask = np.any(np.isnan(self.data), axis=other_axes)
+        keep_mask = ~nan_mask
+
+        # Select only non-NaN indices
+        keep_indices = np.where(keep_mask)[0]
+        result_data = np.take(self.data, keep_indices, axis=axis)
+        new_coords = {d: c for d, c in self.coords.items()}
+        new_coords[dim] = self.coords[dim][keep_indices]
+
+        return Array(result_data, new_coords, self.dims, self.name)
