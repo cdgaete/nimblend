@@ -8,85 +8,126 @@ Nimblend is a lightweight labeled N-dimensional array library with:
 - Zero-fill for missing values
 - Pure NumPy backend (no pandas, dask, or other dependencies)
 
-## API Reference
+## Current API (26 methods/properties)
 
 ### Properties
-- `data`: Underlying NumPy array
-- `coords`: Dict of dimension name → coordinate array
-- `dims`: List of dimension names
-- `shape`: Tuple of dimension sizes
-- `name`: Optional array name
-- `T`: Transpose (reverse dimensions)
+- `data`, `coords`, `dims`, `shape`, `name`, `T`
 
 ### Selection
-- `sel(indexers)`: Select by coordinate labels
-- `isel(indexers)`: Select by integer indices
+- `sel(indexers)` - Select by coordinate labels
+- `isel(indexers)` - Select by integer indices
+
+### Arithmetic (with alignment)
+- `+`, `-`, `*`, `/`, `**`, `-` (negation)
+
+### Comparison (returns boolean Array)
+- `==`, `!=`, `<`, `<=`, `>`, `>=`
 
 ### Reductions
-- `sum(dim=None)`: Sum over dimension(s)
-- `mean(dim=None)`: Mean over dimension(s)
-- `min(dim=None)`: Minimum over dimension(s)
-- `max(dim=None)`: Maximum over dimension(s)
-- `std(dim=None)`: Standard deviation
-- `prod(dim=None)`: Product
+- `sum`, `mean`, `min`, `max`, `std`, `prod`
 
 ### Shape Manipulation
-- `transpose(*dims)`: Reorder dimensions
-- `squeeze(dim=None)`: Remove size-1 dimensions
-- `expand_dims(dim, coord)`: Add new dimension
+- `transpose(*dims)`, `squeeze(dim)`, `expand_dims(dim, coord)`
 
 ### Utilities
-- `rename(name_map)`: Rename dimensions
-- `copy()`: Deep copy
-- `astype(dtype)`: Convert data type
+- `rename(name_map)`, `copy()`, `astype(dtype)`
 
-### Binary Operations
-- `+`, `-`, `*`, `/`, `**`: With automatic alignment
-- Scalar operations apply element-wise
+## Test Coverage
 
-## Key Behaviors
+- 105 tests across 8 test files
+- All tests passing
 
-```python
-# Automatic dimension alignment
-arr1 = Array(data1, {'region': ['DE', 'FR'], 'year': [2020, 2030]})
-arr2 = Array(data2, {'year': [2020, 2030], 'region': ['DE', 'FR']})
-result = arr1 + arr2  # Aligns by name, not position
+## Features to Implement
 
-# Outer join with zero-fill
-arr1 = Array(data1, {'x': ['a', 'b']})
-arr2 = Array(data2, {'x': ['b', 'c']})
-result = arr1 + arr2  # coords: ['a', 'b', 'c'], missing filled with 0
+### High Priority
 
-# Coordinate order preserved
-# Result uses first array's order, then appends new from second
-```
+1. **`__getitem__` with slicing**
+   ```python
+   arr['x']           # Select dimension by name
+   arr[0:2]           # Slice first dimension
+   arr[{'x': 'a'}]    # Dict-based selection (alias for sel)
+   ```
 
-## Development
+2. **`where(cond, other)`** - Conditional replacement
+   ```python
+   arr.where(arr > 0, 0)  # Replace negatives with 0
+   ```
+
+3. **`clip(min, max)`** - Bound values
+   ```python
+   arr.clip(0, 100)  # Clamp to range
+   ```
+
+### Medium Priority
+
+4. **`equals(other)`** - Full array comparison
+   ```python
+   arr1.equals(arr2)  # True if identical
+   ```
+
+5. **`broadcast_like(other)`** - Expand to match shape
+   ```python
+   arr.broadcast_like(larger_arr)
+   ```
+
+6. **`values` property** - Alias for `.data`
+   ```python
+   arr.values  # Same as arr.data
+   ```
+
+### Lower Priority (nimblend uses 0, not NaN)
+
+7. **`fillna(value)`** - Replace NaN with value
+8. **`dropna(dim)`** - Remove coords with NaN
+
+## Development Commands
 
 ```bash
-# Install dev dependencies
-pip install -e ".[dev]"
+cd /home/carlos/projects/nimblend
+source .venv/bin/activate
+
+# Run tests
+pytest tests/
+
+# Run specific test file
+pytest tests/test_sel.py -v
 
 # Run linter
 ruff check src/ tests/
 
-# Run tests
-pytest tests/
+# Fix linting issues
+ruff check --fix src/ tests/
 ```
 
-## Test Coverage
+## Code Style
 
-- 95 tests across 7 test files
-- `test_xarray_comparison.py`: Verify correctness vs xarray
-- `test_sel.py`: Label-based selection
-- `test_isel.py`: Index-based selection
-- `test_reductions.py`: sum, mean, min, max, std, prod
-- `test_transpose.py`: Dimension reordering
-- `test_shape.py`: squeeze, expand_dims
-- `test_utils.py`: rename, copy, astype
+- Use `ruff` for linting (line length 88)
+- Type hints on public methods
+- Docstrings for all public methods
+- Error messages should include available options/context
 
-## Notes
+## Architecture
 
-- Coordinate order preserved from first array in operations
-- Missing values fill with 0, not NaN
-- All reductions return scalar when no dims remain
+```
+src/nimblend/
+├── __init__.py    # Exports Array
+└── core.py        # Array class implementation
+
+tests/
+├── test_xarray_comparison.py  # Correctness vs xarray
+├── test_sel.py                # Label selection
+├── test_isel.py               # Index selection
+├── test_reductions.py         # sum, mean, etc.
+├── test_transpose.py          # Dimension reordering
+├── test_shape.py              # squeeze, expand_dims
+├── test_comparison.py         # ==, <, >, etc.
+└── test_utils.py              # rename, copy, astype
+```
+
+## Key Design Decisions
+
+1. **Outer join alignment**: Result contains union of coordinates
+2. **Zero fill**: Missing values become 0, not NaN
+3. **Coordinate order preserved**: First array's order, then new from second
+4. **Scalars on full reduction**: `arr.sum()` returns Python scalar, not 0-d Array
+5. **Pure NumPy**: No optional backends or lazy evaluation
