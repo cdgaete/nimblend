@@ -224,3 +224,55 @@ class Array:
         new_coords = {d: self.coords[d] for d in new_dims}
 
         return Array(result_data, new_coords, new_dims, self.name)
+
+    def sel(
+        self, indexers: Dict[str, Union[any, List]]
+    ) -> Union["Array", np.number]:
+        """
+        Select data by coordinate labels.
+
+        Parameters
+        ----------
+        indexers : dict
+            Mapping of dimension names to coordinate values or lists of values.
+
+        Returns
+        -------
+        Array or scalar
+            Selected subset. Returns scalar if all dimensions are indexed
+            with single values.
+
+        Examples
+        --------
+        >>> arr.sel({'x': 'a'})           # Select single value along x
+        >>> arr.sel({'x': ['a', 'b']})    # Select multiple values along x
+        >>> arr.sel({'x': 'a', 'y': 0})   # Select along multiple dimensions
+        """
+        result_data = self.data
+        result_coords = dict(self.coords)
+        result_dims = list(self.dims)
+
+        for dim, labels in indexers.items():
+            if dim not in result_dims:
+                raise KeyError(f"Dimension '{dim}' not found")
+
+            axis = result_dims.index(dim)
+            coord = result_coords[dim]
+
+            if isinstance(labels, (list, np.ndarray)):
+                # Multiple labels: find indices and select
+                coord_list = coord.tolist()
+                indices = [coord_list.index(lbl) for lbl in labels]
+                result_data = np.take(result_data, indices, axis=axis)
+                result_coords[dim] = np.array(labels)
+            else:
+                # Single label: reduce this dimension
+                idx = coord.tolist().index(labels)
+                result_data = np.take(result_data, idx, axis=axis)
+                del result_coords[dim]
+                result_dims.remove(dim)
+
+        if len(result_dims) == 0:
+            return result_data.item() if result_data.ndim == 0 else result_data
+
+        return Array(result_data, result_coords, result_dims, self.name)
