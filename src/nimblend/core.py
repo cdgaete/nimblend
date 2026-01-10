@@ -2,9 +2,30 @@
 Labeled N-dimensional arrays with outer-join alignment and zero-fill for missing values.
 """
 
+from datetime import date, datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
+
+
+def _normalize_label(label: Any, coord: np.ndarray) -> Any:
+    """
+    Normalize a label to match the dtype of the coordinate array.
+
+    Handles datetime conversion: strings and python dates are converted
+    to numpy datetime64 when the coordinate has a datetime dtype.
+    """
+    if not np.issubdtype(coord.dtype, np.datetime64):
+        return label
+
+    # Coordinate is datetime64 - normalize the label
+    if isinstance(label, np.datetime64):
+        return label.astype(coord.dtype)
+    elif isinstance(label, str):
+        return np.datetime64(label).astype(coord.dtype)
+    elif isinstance(label, (date, datetime)):
+        return np.datetime64(label).astype(coord.dtype)
+    return label
 
 
 class Array:
@@ -166,7 +187,8 @@ class Array:
                 # Preserve order: self's coords first, then new coords from other
                 self_coords = self.coords[dim]
                 other_coords = other.coords[dim]
-                self_set = set(self_coords.tolist())
+                # Use set of numpy values directly (preserves datetime64 types)
+                self_set = set(self_coords)
                 new_from_other = [c for c in other_coords if c not in self_set]
                 union_coords[dim] = np.concatenate([self_coords, new_from_other])
             elif dim in self.coords:
@@ -443,32 +465,38 @@ class Array:
 
             axis = result_dims.index(dim)
             coord = result_coords[dim]
-            coord_list = coord.tolist()
-            # Build index lookup once (O(n)) instead of repeated list.index() calls
-            coord_to_idx = {v: i for i, v in enumerate(coord_list)}
+            # Build index lookup - iterate numpy array directly to preserve types
+            coord_to_idx = {v: i for i, v in enumerate(coord)}
 
             if isinstance(labels, (list, np.ndarray)):
                 # Multiple labels: find indices and select
                 labels_list = labels if isinstance(labels, list) else labels.tolist()
-                missing = [lbl for lbl in labels_list if lbl not in coord_to_idx]
+                # Normalize labels to match coord dtype (handles datetime)
+                normalized = [_normalize_label(lbl, coord) for lbl in labels_list]
+                missing = [lbl for lbl, norm in zip(labels_list, normalized)
+                           if norm not in coord_to_idx]
                 if missing:
+                    available = coord.tolist()[:10]
                     raise ValueError(
                         f"Labels {missing} not found in dimension '{dim}'. "
-                        f"Available: {coord_list[:10]}"
-                        f"{'...' if len(coord_list) > 10 else ''}"
+                        f"Available: {available}"
+                        f"{'...' if len(coord) > 10 else ''}"
                     )
-                indices = [coord_to_idx[lbl] for lbl in labels_list]
+                indices = [coord_to_idx[norm] for norm in normalized]
                 result_data = np.take(result_data, indices, axis=axis)
-                result_coords[dim] = np.array(labels_list)
+                # Store original labels (preserves user's input type)
+                result_coords[dim] = np.array([coord[i] for i in indices])
             else:
                 # Single label: reduce this dimension
-                if labels not in coord_to_idx:
+                normalized = _normalize_label(labels, coord)
+                if normalized not in coord_to_idx:
+                    available = coord.tolist()[:10]
                     raise ValueError(
                         f"Label '{labels}' not found in dimension '{dim}'. "
-                        f"Available: {coord_list[:10]}"
-                        f"{'...' if len(coord_list) > 10 else ''}"
+                        f"Available: {available}"
+                        f"{'...' if len(coord) > 10 else ''}"
                     )
-                idx = coord_to_idx[labels]
+                idx = coord_to_idx[normalized]
                 result_data = np.take(result_data, idx, axis=axis)
                 del result_coords[dim]
                 result_dims.remove(dim)
