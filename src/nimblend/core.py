@@ -737,3 +737,37 @@ class Array:
         """
         result_data = np.clip(self.data, min, max)
         return Array(result_data, self.coords, self.dims, self.name)
+
+    def equals(self, other: "Array") -> bool:
+        """
+        Check if two arrays are identical.
+
+        Arrays are equal if they have the same dimensions, coordinates,
+        and data values. Names are ignored.
+
+        Parameters
+        ----------
+        other : Array
+            Array to compare against.
+
+        Returns
+        -------
+        bool
+            True if arrays are identical.
+
+        Examples
+        --------
+        >>> arr1.equals(arr2)
+        >>> arr1.equals(arr1.copy())  # True
+        """
+        if not isinstance(other, Array):
+            return False
+
+        if self.dims != other.dims:
+            return False
+
+        for dim in self.dims:
+            if not np.array_equal(self.coords[dim], other.coords[dim]):
+                return False
+
+        return np.array_equal(self.data, other.data)
