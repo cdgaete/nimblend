@@ -8,28 +8,40 @@ Nimblend is a lightweight labeled N-dimensional array library with:
 - Zero-fill for missing values
 - Pure NumPy backend + optional Rust acceleration
 
-## Performance vs xarray (median 6.1x faster)
+## Performance vs xarray (median 5.6x faster)
 
 | Operation | nimblend | xarray | Speedup |
 |-----------|----------|--------|---------|
-| Creation 100x100 | 0.02ms | 0.59ms | **29x** |
+| Creation 100x100 | 0.02ms | 0.60ms | **29x** |
 | Aligned add 100x100 | 0.03ms | 0.56ms | **19x** |
 | Misaligned add 1000x1000 | 2.34ms | 8.71ms | **3.7x** |
 | Reductions | 0.28ms | 1.74ms | **6.3x** |
+| sel single 1000x1000 | 0.08ms | 0.11ms | **1.5x** |
+
+**Nimblend faster in all 27 benchmarks** (up from 25/27 previously)
 
 ## Recent Changes (This Session)
 
-### 1. Datetime64 Coordinate Support
+### 1. Optimized `sel()` for Large Arrays
+- Batch dtype checking: `_normalize_labels_batch()` checks dtype once, not per label
+- `searchsorted` for single label lookups on sorted numeric/datetime coords
+- Linear search fallback avoids building full dict for single lookups
+- Result: `sel single (1000x1000)` went from 0.7x → 1.5x vs xarray
+
+### 2. Column-Misaligned 2D Fast Path
+- Extended `_fast_aligned_binop_2d` to handle column-misaligned arrays
+- Uses transpose → row-aligned op → transpose back pattern
+- Column-misaligned 1000x1000: **4.8x faster** than xarray outer join
+
+### 3. Datetime64 Coordinate Support (Previous)
 - `sel()` accepts: `datetime64`, string, `date`, `datetime`
 - Outer join alignment works with datetime coords
 - Uses int64 views for fast hashing (6-7x faster than native datetime64)
-- Uses `searchsorted` for large sorted numeric/datetime arrays
 
-### 2. Rust `aligned_binop_2d` Optimization
-- New fast path for 2D arrays with one misaligned dimension
+### 4. Rust `aligned_binop_2d` (Previous)
+- Fast path for 2D arrays with one misaligned dimension
 - Fuses fill + operation in single pass
 - **2.6x faster, 65% less memory** vs previous approach
-- Supports add/sub/mul/div
 
 ## Rust Acceleration (`rust/src/lib.rs`)
 
@@ -40,7 +52,7 @@ cd rust && maturin develop --release
 Functions:
 - `fill_expanded_2d_f64` - Fill 2D array at indices
 - `fill_expanded_nd_from_indices` - Fill ND array at indices  
-- `aligned_binop_2d` - **NEW** - Fused fill+op for 2D misaligned
+- `aligned_binop_2d` - Fused fill+op for 2D misaligned (row or col)
 - `scatter_add_2d_rows` - Scatter-add rows (unused currently)
 
 ## Current API (34 methods/properties)
@@ -67,21 +79,16 @@ Functions:
 
 ## Test Coverage
 
-- **171 tests** across 15 test files (including new `test_datetime.py`)
+- **172 tests** across 15 test files
 - All passing
 
-## Known Limitations
 
-1. `sel()` slower than xarray for large arrays (1000x1000) - needs searchsorted
-2. Column-misaligned 2D not optimized (only row-misaligned uses fast path)
-3. No parallel Rust yet (could use rayon for >1M elements)
+## Potential Future Optimizations
 
-## Potential Future Rust Optimizations
-
-1. `aligned_binop_nd` - Generalize to N dimensions
-2. `coord_union_sorted` - Fast union for sorted coords
-3. Parallel versions with rayon for large arrays
-4. `sel` optimization with searchsorted in Rust
+1. `aligned_binop_nd` - Generalize to N dimensions in Rust
+2. `coord_union_sorted` - Fast union for sorted coords in Rust
+3. Parallel Rust with rayon for arrays >1M elements
+4. `sel` batch operations in Rust
 
 ## Development Commands
 
@@ -102,12 +109,12 @@ cd rust && maturin develop --release
 ```
 src/nimblend/
 ├── __init__.py     # Exports Array
-├── core.py         # Array class (~1100 lines)
+├── core.py         # Array class (~1200 lines)
 └── _accel.py       # Rust bindings with NumPy fallback
 
 rust/src/lib.rs     # Rust acceleration functions
 benchmarks/         # Performance comparison scripts
-tests/              # 15 test files, 171 tests
+tests/              # 15 test files, 172 tests
 ```
 
 ## Key Design Decisions
