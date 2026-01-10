@@ -208,24 +208,30 @@ class Array:
             if dim not in self.dims:
                 data_to_assign = np.expand_dims(data_to_assign, axis=i)
 
-        # Check if we can use fast slice-based indexing (contiguous prefix)
+        # Check if we can use fast slice-based indexing (contiguous indices)
         slices_or_indices = []
         can_use_slices = True
         for dim in all_dims:
             if dim in self.dims:
                 union_coord = union_coords[dim]
                 self_coord = self.coords[dim]
-                self_len = len(self_coord)
-                union_len = len(union_coord)
-                # Check if self_coord is a prefix of union_coord
-                prefix_match = np.array_equal(union_coord[:self_len], self_coord)
-                if self_len <= union_len and prefix_match:
-                    slices_or_indices.append(slice(0, self_len))
+                # Build index mapping
+                coord_to_idx = {v: i for i, v in enumerate(union_coord)}
+                indices = np.array([coord_to_idx[v] for v in self_coord])
+
+                # Check if indices are contiguous (can use slice)
+                if len(indices) > 0:
+                    start_idx = indices[0]
+                    expected = np.arange(start_idx, start_idx + len(indices))
+                    if np.array_equal(indices, expected):
+                        # Contiguous range - use slice
+                        end_idx = start_idx + len(indices)
+                        slices_or_indices.append(slice(start_idx, end_idx))
+                    else:
+                        can_use_slices = False
+                        slices_or_indices.append(indices)
                 else:
-                    can_use_slices = False
-                    coord_to_idx = {v: i for i, v in enumerate(union_coord)}
-                    indices = np.array([coord_to_idx[v] for v in self_coord])
-                    slices_or_indices.append(indices)
+                    slices_or_indices.append(slice(0, 0))
             else:
                 slices_or_indices.append(slice(None))  # Full slice for new dims
 
