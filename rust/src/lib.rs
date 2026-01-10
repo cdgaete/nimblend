@@ -4,7 +4,7 @@
 //! identified in profiling: coordinate alignment and index mapping.
 
 use numpy::ndarray::Array1;
-use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods};
+use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods, PyUntypedArrayMethods};
 use numpy::{PyReadonlyArray1, PyReadonlyArray2};
 use pyo3::prelude::*;
 use rayon::prelude::*;
@@ -12,9 +12,17 @@ use std::collections::HashMap;
 
 /// Wrapper to make raw pointer Send+Sync for parallel access.
 /// SAFETY: Caller must ensure no data races (disjoint index access).
+#[derive(Clone, Copy)]
 struct SendPtr(*mut f64);
 unsafe impl Send for SendPtr {}
 unsafe impl Sync for SendPtr {}
+
+impl SendPtr {
+    #[inline(always)]
+    fn ptr(self) -> *mut f64 {
+        self.0
+    }
+}
 
 /// Build a coordinate-to-index mapping from string coordinates.
 #[pyfunction]
@@ -231,7 +239,7 @@ fn aligned_binop_2d_parallel(
         row_idx1.par_iter().enumerate().for_each(|(i, &ri)| {
             let ri = ri as usize;
             unsafe {
-                let row_ptr = res_ptr.0.add(ri * res_stride);
+                let row_ptr = res_ptr.ptr().add(ri * res_stride);
                 for j in 0..ncols {
                     *row_ptr.add(j) = src1[[i, j]];
                 }
@@ -242,7 +250,7 @@ fn aligned_binop_2d_parallel(
         row_idx2.par_iter().enumerate().for_each(|(i, &ri)| {
             let ri = ri as usize;
             unsafe {
-                let row_ptr = res_ptr.0.add(ri * res_stride);
+                let row_ptr = res_ptr.ptr().add(ri * res_stride);
                 match op_code {
                     0 => { for j in 0..ncols { *row_ptr.add(j) += src2[[i, j]]; } }
                     1 => { for j in 0..ncols { *row_ptr.add(j) -= src2[[i, j]]; } }
@@ -284,7 +292,7 @@ fn elementwise_binop_parallel(
                     3 => src1[i] / src2[i],
                     _ => src1[i] + src2[i],
                 };
-                *res_ptr.0.add(i) = val;
+                *res_ptr.ptr().add(i) = val;
             }
         });
     });

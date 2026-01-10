@@ -23,6 +23,9 @@ try:
         aligned_binop_2d as _rust_aligned_binop_2d,
     )
     from nimblend_rust import (
+        aligned_binop_2d_parallel as _rust_aligned_binop_2d_parallel,
+    )
+    from nimblend_rust import (
         fill_expanded_2d_f64 as _rust_fill_2d,
     )
     from nimblend_rust import (
@@ -34,6 +37,9 @@ try:
     HAS_RUST = True
 except ImportError:
     HAS_RUST = False
+
+# Threshold for parallel execution (number of elements)
+PARALLEL_THRESHOLD = 1_000_000  # 1M elements
 
 
 # Re-export for use in core.py
@@ -53,14 +59,13 @@ def aligned_binop_2d(
     result[row_idx2, :] op= source2
     """
     if HAS_RUST:
-        _rust_aligned_binop_2d(
-            result,
-            source1,
-            row_indices1.astype(np.int64),
-            source2,
-            row_indices2.astype(np.int64),
-            op,
-        )
+        idx1 = row_indices1.astype(np.int64)
+        idx2 = row_indices2.astype(np.int64)
+        n_elements = result.size
+        if n_elements >= PARALLEL_THRESHOLD:
+            _rust_aligned_binop_2d_parallel(result, source1, idx1, source2, idx2, op)
+        else:
+            _rust_aligned_binop_2d(result, source1, idx1, source2, idx2, op)
     else:
         # Pure NumPy fallback
         result[row_indices1, :] = source1
