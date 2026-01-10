@@ -13,6 +13,51 @@ class Array:
 
     Binary operations between arrays use outer join semantics: the result
     contains the union of all coordinates, with missing values filled as zero.
+
+    Parameters
+    ----------
+    data : array-like
+        The underlying array data.
+    coords : dict
+        Mapping of dimension names to coordinate values.
+    dims : list of str, optional
+        Dimension names in axis order. Defaults to coords key order.
+    name : str, optional
+        Name for the array.
+
+    Attributes
+    ----------
+    data : np.ndarray
+        The underlying NumPy array.
+    coords : dict
+        Mapping of dimension names to coordinate arrays.
+    dims : list
+        List of dimension names.
+    shape : tuple
+        Shape of the data array.
+    name : str or None
+        Optional name for the array.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from nimblend import Array
+
+    Create a 2D array:
+
+    >>> data = np.array([[1, 2], [3, 4]])
+    >>> arr = Array(data, {'x': ['a', 'b'], 'y': [0, 1]})
+
+    Arithmetic with automatic alignment:
+
+    >>> arr1 = Array(np.array([1, 2]), {'x': ['a', 'b']})
+    >>> arr2 = Array(np.array([10, 20]), {'x': ['b', 'c']})
+    >>> result = arr1 + arr2  # outer join: x=['a', 'b', 'c']
+
+    Selection by label:
+
+    >>> arr.sel({'x': 'a'})  # returns 1D array
+    >>> arr.sel({'x': 'a', 'y': 0})  # returns scalar
     """
 
     def __init__(
