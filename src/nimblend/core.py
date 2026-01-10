@@ -1215,3 +1215,149 @@ class Array:
         new_coords[dim] = self.coords[dim][keep_indices]
 
         return Array(result_data, new_coords, self.dims, self.name)
+
+
+    def diff(self, dim: str, n: int = 1) -> "Array":
+        """
+        Compute the n-th discrete difference along a dimension.
+
+        Parameters
+        ----------
+        dim : str
+            Dimension along which to compute differences.
+        n : int, optional
+            Number of times to apply diff. Default is 1.
+
+        Returns
+        -------
+        Array
+            Array with differences. Size along dim is reduced by n.
+
+        Examples
+        --------
+        >>> arr.diff('time')  # First differences along time
+        >>> arr.diff('x', n=2)  # Second differences along x
+        """
+        if dim not in self.dims:
+            raise KeyError(
+                f"Dimension '{dim}' not found. Available dimensions: {self.dims}"
+            )
+
+        axis = self.dims.index(dim)
+        result_data = np.diff(self.data, n=n, axis=axis)
+
+        # Coords are shortened by n
+        new_coords = {d: c.copy() for d, c in self.coords.items()}
+        new_coords[dim] = self.coords[dim][n:]
+
+        return Array(result_data, new_coords, self.dims, self.name)
+
+    def cumsum(self, dim: str) -> "Array":
+        """
+        Compute cumulative sum along a dimension.
+
+        Parameters
+        ----------
+        dim : str
+            Dimension along which to compute cumulative sum.
+
+        Returns
+        -------
+        Array
+            Array with cumulative sums.
+
+        Examples
+        --------
+        >>> arr.cumsum('time')
+        """
+        if dim not in self.dims:
+            raise KeyError(
+                f"Dimension '{dim}' not found. Available dimensions: {self.dims}"
+            )
+
+        axis = self.dims.index(dim)
+        result_data = np.cumsum(self.data, axis=axis)
+        return Array(result_data, self.coords, self.dims, self.name)
+
+    def cumprod(self, dim: str) -> "Array":
+        """
+        Compute cumulative product along a dimension.
+
+        Parameters
+        ----------
+        dim : str
+            Dimension along which to compute cumulative product.
+
+        Returns
+        -------
+        Array
+            Array with cumulative products.
+        """
+        if dim not in self.dims:
+            raise KeyError(
+                f"Dimension '{dim}' not found. Available dimensions: {self.dims}"
+            )
+
+        axis = self.dims.index(dim)
+        result_data = np.cumprod(self.data, axis=axis)
+        return Array(result_data, self.coords, self.dims, self.name)
+
+    def argmax(self, dim: str) -> "Array":
+        """
+        Return indices of maximum values along a dimension.
+
+        Parameters
+        ----------
+        dim : str
+            Dimension along which to find argmax.
+
+        Returns
+        -------
+        Array
+            Array of integer indices. Dimension is removed.
+        """
+        if dim not in self.dims:
+            raise KeyError(
+                f"Dimension '{dim}' not found. Available dimensions: {self.dims}"
+            )
+
+        axis = self.dims.index(dim)
+        result_data = np.argmax(self.data, axis=axis)
+
+        new_dims = [d for d in self.dims if d != dim]
+        new_coords = {d: self.coords[d] for d in new_dims}
+
+        if len(new_dims) == 0:
+            return result_data.item()
+
+        return Array(result_data, new_coords, new_dims, self.name)
+
+    def argmin(self, dim: str) -> "Array":
+        """
+        Return indices of minimum values along a dimension.
+
+        Parameters
+        ----------
+        dim : str
+            Dimension along which to find argmin.
+
+        Returns
+        -------
+        Array
+            Array of integer indices. Dimension is removed.
+        """
+        if dim not in self.dims:
+            raise KeyError(
+                f"Dimension '{dim}' not found. Available dimensions: {self.dims}"
+            )
+
+        axis = self.dims.index(dim)
+        result_data = np.argmin(self.data, axis=axis)
+
+        new_dims = [d for d in self.dims if d != dim]
+        new_coords = {d: self.coords[d] for d in new_dims}
+
+        if len(new_dims) == 0:
+            return result_data.item()
+
+        return Array(result_data, new_coords, new_dims, self.name)
