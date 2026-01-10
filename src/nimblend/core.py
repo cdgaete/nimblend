@@ -247,13 +247,33 @@ class Array:
             if dim in self.dims:
                 union_coord = union_coords[dim]
                 self_coord = self.coords[dim]
-                # Use int64 view for datetime64 (faster hashing)
-                if np.issubdtype(union_coord.dtype, np.datetime64):
+
+                # Use searchsorted for large sorted numeric/datetime arrays
+                is_numeric = np.issubdtype(union_coord.dtype, np.number)
+                is_datetime = np.issubdtype(union_coord.dtype, np.datetime64)
+
+                if (is_numeric or is_datetime) and len(union_coord) > 100:
+                    # Check if sorted (O(n) but enables O(log n) lookups)
+                    is_sorted = np.all(union_coord[:-1] <= union_coord[1:])
+                    if is_sorted:
+                        indices = np.searchsorted(union_coord, self_coord)
+                    elif is_datetime:
+                        # datetime64: use int64 view for faster hashing
+                        u_view = union_coord.view("int64")
+                        s_view = self_coord.view("int64")
+                        coord_to_idx = {v: i for i, v in enumerate(u_view)}
+                        indices = np.array([coord_to_idx[v] for v in s_view])
+                    else:
+                        coord_to_idx = {v: i for i, v in enumerate(union_coord)}
+                        indices = np.array([coord_to_idx[v] for v in self_coord])
+                elif is_datetime:
+                    # Small datetime: use int64 view
                     u_view = union_coord.view("int64")
                     s_view = self_coord.view("int64")
                     coord_to_idx = {v: i for i, v in enumerate(u_view)}
                     indices = np.array([coord_to_idx[v] for v in s_view])
                 else:
+                    # String or small numeric: use dict
                     coord_to_idx = {v: i for i, v in enumerate(union_coord)}
                     indices = np.array([coord_to_idx[v] for v in self_coord])
 
