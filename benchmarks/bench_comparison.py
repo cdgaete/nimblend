@@ -139,8 +139,10 @@ def benchmark_arithmetic_misaligned(sizes: List[int]) -> List[BenchResult]:
         def nb_add():
             return nb1 + nb2
         
+        # Use outer join for fair comparison (nimblend always uses outer join)
         def xa_add():
-            return xa1 + xa2
+            with xr.set_options(arithmetic_join='outer'):
+                return xa1 + xa2
         
         results.append(run_benchmark(f"add misaligned ({n}x{n}, 50% overlap)", nb_add, xa_add))
     
