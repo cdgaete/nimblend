@@ -1433,3 +1433,99 @@ class Array:
             return result_data.item()
 
         return Array(result_data, new_coords, new_dims, self.name)
+
+    def shift(self, shifts: Dict[str, int], fill_value: float = 0.0) -> "Array":
+        """
+        Shift array values along dimension(s).
+
+        Values shifted beyond array boundaries are dropped, and new positions
+        are filled with fill_value.
+
+        Parameters
+        ----------
+        shifts : dict
+            Mapping of dimension names to shift amounts. Positive values shift
+            data to higher indices (pads at start), negative to lower indices
+            (pads at end).
+        fill_value : float, optional
+            Value to use for newly introduced positions. Default is 0.
+
+        Returns
+        -------
+        Array
+            Shifted array with same shape.
+
+        Examples
+        --------
+        >>> arr.shift({'x': 1})       # Shift x forward by 1, pad start with 0
+        >>> arr.shift({'x': -1})      # Shift x backward by 1, pad end with 0
+        >>> arr.shift({'x': 1, 'y': 2})  # Shift multiple dimensions
+        """
+        for dim in shifts:
+            if dim not in self.dims:
+                raise KeyError(
+                    f"Dimension '{dim}' not found. Available dimensions: {self.dims}"
+                )
+
+        result = self.data.copy()
+        if fill_value != 0:
+            result = result.astype(float)
+
+        for dim, n in shifts.items():
+            if n == 0:
+                continue
+
+            axis = self.dims.index(dim)
+            new_result = np.full_like(result, fill_value, dtype=float)
+
+            if n > 0:
+                # Shift forward: copy data[:-n] to result[n:]
+                slices_src = [slice(None)] * result.ndim
+                slices_dst = [slice(None)] * result.ndim
+                slices_src[axis] = slice(None, -n)
+                slices_dst[axis] = slice(n, None)
+                new_result[tuple(slices_dst)] = result[tuple(slices_src)]
+            else:
+                # Shift backward: copy data[-n:] to result[:-n]
+                slices_src = [slice(None)] * result.ndim
+                slices_dst = [slice(None)] * result.ndim
+                slices_src[axis] = slice(-n, None)
+                slices_dst[axis] = slice(None, n)
+                new_result[tuple(slices_dst)] = result[tuple(slices_src)]
+
+            result = new_result
+
+        return Array(result, self.coords, self.dims, self.name)
+
+    def roll(self, shifts: Dict[str, int]) -> "Array":
+        """
+        Roll array values along dimension(s) with wrap-around.
+
+        Values shifted beyond boundaries wrap to the opposite side.
+
+        Parameters
+        ----------
+        shifts : dict
+            Mapping of dimension names to shift amounts.
+
+        Returns
+        -------
+        Array
+            Rolled array with same shape.
+
+        Examples
+        --------
+        >>> arr.roll({'x': 1})   # Roll x by 1, wrapping last to first
+        >>> arr.roll({'x': -1})  # Roll x by -1, wrapping first to last
+        """
+        for dim in shifts:
+            if dim not in self.dims:
+                raise KeyError(
+                    f"Dimension '{dim}' not found. Available dimensions: {self.dims}"
+                )
+
+        shift_tuple = tuple(shifts.get(dim, 0) for dim in self.dims)
+        axes = tuple(range(len(self.dims)))
+        result_data = np.roll(self.data, shift_tuple, axis=axes)
+
+        return Array(result_data, self.coords, self.dims, self.name)
