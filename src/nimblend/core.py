@@ -276,3 +276,53 @@ class Array:
             return result_data.item() if result_data.ndim == 0 else result_data
 
         return Array(result_data, result_coords, result_dims, self.name)
+
+
+    def isel(
+        self, indexers: Dict[str, Union[int, List[int]]]
+    ) -> Union["Array", np.number]:
+        """
+        Select data by integer index positions.
+
+        Parameters
+        ----------
+        indexers : dict
+            Mapping of dimension names to integer indices or lists of indices.
+
+        Returns
+        -------
+        Array or scalar
+            Selected subset. Returns scalar if all dimensions are indexed
+            with single values.
+
+        Examples
+        --------
+        >>> arr.isel({'x': 0})            # Select first element along x
+        >>> arr.isel({'x': [0, 2]})       # Select first and third along x
+        >>> arr.isel({'x': 0, 'y': -1})   # Negative indexing supported
+        """
+        result_data = self.data
+        result_coords = dict(self.coords)
+        result_dims = list(self.dims)
+
+        for dim, indices in indexers.items():
+            if dim not in result_dims:
+                raise KeyError(f"Dimension '{dim}' not found")
+
+            axis = result_dims.index(dim)
+            coord = result_coords[dim]
+
+            if isinstance(indices, (list, np.ndarray)):
+                # Multiple indices: select and keep dimension
+                result_data = np.take(result_data, indices, axis=axis)
+                result_coords[dim] = coord[indices]
+            else:
+                # Single index: reduce this dimension
+                result_data = np.take(result_data, indices, axis=axis)
+                del result_coords[dim]
+                result_dims.remove(dim)
+
+        if len(result_dims) == 0:
+            return result_data.item() if result_data.ndim == 0 else result_data
+
+        return Array(result_data, result_coords, result_dims, self.name)
