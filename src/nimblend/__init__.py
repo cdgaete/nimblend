@@ -4,6 +4,6 @@ Nimblend: Labeled N-dimensional arrays with outer-join alignment.
 
 __version__ = "0.1.0"
 
-from .core import Array
+from .core import Array, concat
 
-__all__ = ["Array"]
+__all__ = ["Array", "concat"]

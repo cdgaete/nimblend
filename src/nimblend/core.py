@@ -66,6 +66,78 @@ def _normalize_labels_batch(labels: list, coord: np.ndarray) -> list:
     return result
 
 
+def concat(arrays: List["Array"], dim: str) -> "Array":
+    """
+    Concatenate arrays along a dimension.
+
+    Arrays must have the same dimensions and matching coordinates on all
+    dimensions except the concatenation dimension. Coordinates along the
+    concatenation dimension are combined.
+
+    Parameters
+    ----------
+    arrays : list of Array
+        Arrays to concatenate. Must have compatible dimensions.
+    dim : str
+        Dimension along which to concatenate.
+
+    Returns
+    -------
+    Array
+        Concatenated array.
+
+    Examples
+    --------
+    >>> import nimblend as nb
+    >>> arr1 = nb.Array(np.array([[1, 2], [3, 4]]), {'x': ['a', 'b'], 'y': [0, 1]})
+    >>> arr2 = nb.Array(np.array([[5, 6]]), {'x': ['c'], 'y': [0, 1]})
+    >>> result = nb.concat([arr1, arr2], dim='x')
+    >>> result.shape
+    (3, 2)
+    """
+    if not arrays:
+        raise ValueError("Cannot concatenate empty list of arrays")
+
+    if len(arrays) == 1:
+        return arrays[0].copy()
+
+    first = arrays[0]
+
+    # Validate all arrays have the same dims
+    for i, arr in enumerate(arrays[1:], 1):
+        if arr.dims != first.dims:
+            raise ValueError(
+                f"Array {i} has different dimensions {arr.dims} "
+                f"than array 0 {first.dims}"
+            )
+
+    if dim not in first.dims:
+        raise KeyError(
+            f"Dimension '{dim}' not found. Available dimensions: {first.dims}"
+        )
+
+    # Validate non-concat dims have matching coords
+    for other_dim in first.dims:
+        if other_dim == dim:
+            continue
+        for i, arr in enumerate(arrays[1:], 1):
+            if not np.array_equal(first.coords[other_dim], arr.coords[other_dim]):
+                raise ValueError(
+                    f"Coordinates for dimension '{other_dim}' do not match "
+                    f"between array 0 and array {i}"
+                )
+
+    # Concatenate data and coords along dim
+    axis = first.dims.index(dim)
+    concat_data = np.concatenate([arr.data for arr in arrays], axis=axis)
+    concat_coords = np.concatenate([arr.coords[dim] for arr in arrays])
+
+    new_coords = {d: first.coords[d].copy() for d in first.dims}
+    new_coords[dim] = concat_coords
+
+    return Array(concat_data, new_coords, first.dims, first.name)
+
+
 class Array:
     """
     Labeled N-dimensional array with automatic coordinate alignment.
