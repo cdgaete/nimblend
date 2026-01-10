@@ -1,7 +1,6 @@
 site_name: Nimblend
 site_description: Lightweight labeled N-dimensional arrays with outer-join alignment
-site_url: https://github.com/your-username/nimblend
-repo_url: https://github.com/your-username/nimblend
+repo_url: https://github.com/carlos/nimblend
 repo_name: nimblend
 
 theme:

@@ -8,77 +8,64 @@ Nimblend is a lightweight labeled N-dimensional array library with:
 - Zero-fill for missing values
 - Pure NumPy backend (no pandas, dask, or other dependencies)
 
-## Current API (26 methods/properties)
+## Current API (34 methods/properties)
 
 ### Properties
-- `data`, `coords`, `dims`, `shape`, `name`, `T`
+- `data`, `coords`, `dims`, `shape`, `name`, `values`, `T`
 
 ### Selection
 - `sel(indexers)` - Select by coordinate labels
 - `isel(indexers)` - Select by integer indices
+- `__getitem__` - Dict, int/slice, or dim name indexing
 
 ### Arithmetic (with alignment)
 - `+`, `-`, `*`, `/`, `**`, `-` (negation)
 
 ### Comparison (returns boolean Array)
 - `==`, `!=`, `<`, `<=`, `>`, `>=`
+- `equals(other)` - Full array comparison
 
 ### Reductions
 - `sum`, `mean`, `min`, `max`, `std`, `prod`
 
 ### Shape Manipulation
 - `transpose(*dims)`, `squeeze(dim)`, `expand_dims(dim, coord)`
+- `broadcast_like(other)` - Expand to match shape
+
+### Conditional
+- `where(cond, other)` - Replace where condition is False
+- `clip(min, max)` - Bound values to range
+
+### NaN Handling
+- `fillna(value)` - Replace NaN with value
+- `dropna(dim)` - Remove coords with NaN
 
 ### Utilities
 - `rename(name_map)`, `copy()`, `astype(dtype)`
 
 ## Test Coverage
 
-- 105 tests across 8 test files
+- 164 tests across 14 test files
 - All tests passing
 
-## Features to Implement
+## Documentation
 
-### High Priority
+- mkdocs-material setup in `/docs`
+- Run locally: `mkdocs serve -a 0.0.0.0:8000`
+- Deploy: `mkdocs gh-deploy`
 
-1. **`__getitem__` with slicing**
-   ```python
-   arr['x']           # Select dimension by name
-   arr[0:2]           # Slice first dimension
-   arr[{'x': 'a'}]    # Dict-based selection (alias for sel)
-   ```
+## Next Steps: Performance
 
-2. **`where(cond, other)`** - Conditional replacement
-   ```python
-   arr.where(arr > 0, 0)  # Replace negatives with 0
-   ```
+### Benchmarks vs xarray
+- Create benchmark suite comparing nimblend vs xarray
+- Key operations: creation, arithmetic, alignment, reductions, selection
+- Measure both time and memory
+- Generate comparison charts
 
-3. **`clip(min, max)`** - Bound values
-   ```python
-   arr.clip(0, 100)  # Clamp to range
-   ```
-
-### Medium Priority
-
-4. **`equals(other)`** - Full array comparison
-   ```python
-   arr1.equals(arr2)  # True if identical
-   ```
-
-5. **`broadcast_like(other)`** - Expand to match shape
-   ```python
-   arr.broadcast_like(larger_arr)
-   ```
-
-6. **`values` property** - Alias for `.data`
-   ```python
-   arr.values  # Same as arr.data
-   ```
-
-### Lower Priority (nimblend uses 0, not NaN)
-
-7. **`fillna(value)`** - Replace NaN with value
-8. **`dropna(dim)`** - Remove coords with NaN
+### Profile Hot Paths
+- Identify performance bottlenecks
+- Focus on `_align_with()` and `_fill_expanded()` methods
+- Consider optimizations for common cases
 
 ## Development Commands
 
@@ -89,39 +76,25 @@ source .venv/bin/activate
 # Run tests
 pytest tests/
 
-# Run specific test file
-pytest tests/test_sel.py -v
-
 # Run linter
 ruff check src/ tests/
 
-# Fix linting issues
-ruff check --fix src/ tests/
+# Build docs
+mkdocs build
+
+# Serve docs locally
+mkdocs serve -a 0.0.0.0:8000
 ```
-
-## Code Style
-
-- Use `ruff` for linting (line length 88)
-- Type hints on public methods
-- Docstrings for all public methods
-- Error messages should include available options/context
 
 ## Architecture
 
 ```
 src/nimblend/
 ├── __init__.py    # Exports Array
-└── core.py        # Array class implementation
+└── core.py        # Array class (~870 lines)
 
-tests/
-├── test_xarray_comparison.py  # Correctness vs xarray
-├── test_sel.py                # Label selection
-├── test_isel.py               # Index selection
-├── test_reductions.py         # sum, mean, etc.
-├── test_transpose.py          # Dimension reordering
-├── test_shape.py              # squeeze, expand_dims
-├── test_comparison.py         # ==, <, >, etc.
-└── test_utils.py              # rename, copy, astype
+tests/              # 14 test files, 164 tests
+docs/               # mkdocs-material documentation
 ```
 
 ## Key Design Decisions
