@@ -166,6 +166,9 @@ result = arr1 + arr2  # Aligns by name, not position
 # Install with dev dependencies
 pip install -e ".[dev]"
 
+# Set up pre-commit hooks (runs ruff + tests on every commit)
+pre-commit install
+
 # Run tests
 pytest
 
