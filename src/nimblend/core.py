@@ -197,33 +197,53 @@ class Array:
             return Array(self.data**other, self.coords, self.dims, self.name)
         raise TypeError("Power only supported with scalars")
 
-    def sum(self, dim: Optional[Union[str, List[str]]] = None) -> Union["Array", float]:
-        """
-        Sum array values over one or more dimensions.
-
-        Parameters
-        ----------
-        dim : str or list of str, optional
-            Dimension(s) to sum over. If None, sums over all dimensions.
-
-        Returns
-        -------
-        Array or scalar
-            Array with reduced dimensions, or scalar if all dimensions summed.
-        """
+    def _reduce(
+        self,
+        func: Callable,
+        dim: Optional[Union[str, List[str]]] = None,
+    ) -> Union["Array", np.number]:
+        """Apply a reduction function over specified dimensions."""
         if dim is None:
-            return np.sum(self.data)
+            return func(self.data)
 
         if isinstance(dim, str):
             dim = [dim]
 
         axes = tuple(self.dims.index(d) for d in dim)
-        result_data = np.sum(self.data, axis=axes)
+        result_data = func(self.data, axis=axes)
 
         new_dims = [d for d in self.dims if d not in dim]
         new_coords = {d: self.coords[d] for d in new_dims}
 
+        # Return scalar if no dimensions remain
+        if len(new_dims) == 0:
+            return result_data.item()
+
         return Array(result_data, new_coords, new_dims, self.name)
+
+    def sum(self, dim: Optional[Union[str, List[str]]] = None) -> Union["Array", float]:
+        """Sum over dimension(s). If None, sum all."""
+        return self._reduce(np.sum, dim)
+
+    def mean(self, dim: Optional[Union[str, List[str]]] = None):
+        """Mean over dimension(s). If None, mean of all."""
+        return self._reduce(np.mean, dim)
+
+    def min(self, dim: Optional[Union[str, List[str]]] = None) -> Union["Array", float]:
+        """Minimum over dimension(s). If None, min of all."""
+        return self._reduce(np.min, dim)
+
+    def max(self, dim: Optional[Union[str, List[str]]] = None) -> Union["Array", float]:
+        """Maximum over dimension(s). If None, max of all."""
+        return self._reduce(np.max, dim)
+
+    def std(self, dim: Optional[Union[str, List[str]]] = None) -> Union["Array", float]:
+        """Standard deviation over dimension(s). If None, std of all."""
+        return self._reduce(np.std, dim)
+
+    def prod(self, dim: Optional[Union[str, List[str]]] = None):
+        """Product over dimension(s). If None, product of all."""
+        return self._reduce(np.prod, dim)
 
     def sel(
         self, indexers: Dict[str, Union[any, List]]
