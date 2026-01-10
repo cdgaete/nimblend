@@ -8,17 +8,17 @@ Nimblend is a lightweight labeled N-dimensional array library with:
 - Zero-fill for missing values
 - Pure NumPy backend + optional Rust acceleration
 
-## Performance vs xarray (median 5.6x faster)
+## Performance vs xarray (median 6.1x faster)
 
 | Operation | nimblend | xarray | Speedup |
 |-----------|----------|--------|---------|
 | Creation 100x100 | 0.02ms | 0.60ms | **29x** |
 | Aligned add 100x100 | 0.03ms | 0.56ms | **19x** |
 | Misaligned add 1000x1000 | 2.34ms | 8.71ms | **3.7x** |
-| Reductions | 0.28ms | 1.74ms | **6.3x** |
-| sel single 1000x1000 | 0.08ms | 0.11ms | **1.5x** |
+| Reductions 1000x1000 | 0.28ms | 1.75ms | **6.2x** |
+| sel single 1000x1000 | 0.07ms | 0.10ms | **1.5x** |
 
-**Nimblend faster in all 27 benchmarks** (up from 25/27 previously)
+**Nimblend faster in all 27 benchmarks**
 
 ## Recent Changes (This Session)
 
@@ -33,15 +33,17 @@ Nimblend is a lightweight labeled N-dimensional array library with:
 - Uses transpose → row-aligned op → transpose back pattern
 - Column-misaligned 1000x1000: **4.8x faster** than xarray outer join
 
-### 3. Datetime64 Coordinate Support (Previous)
-- `sel()` accepts: `datetime64`, string, `date`, `datetime`
-- Outer join alignment works with datetime coords
-- Uses int64 views for fast hashing (6-7x faster than native datetime64)
+### 3. New Methods Added
+- `diff(dim, n=1)`: n-th discrete differences along dimension
+- `cumsum(dim)`: cumulative sum along dimension  
+- `cumprod(dim)`: cumulative product along dimension
+- `argmax(dim)`: indices of maximum values
+- `argmin(dim)`: indices of minimum values
+- `concat(arrays, dim)`: concatenate arrays along dimension (module function)
 
-### 4. Rust `aligned_binop_2d` (Previous)
-- Fast path for 2D arrays with one misaligned dimension
-- Fuses fill + operation in single pass
-- **2.6x faster, 65% less memory** vs previous approach
+### 4. Previous Optimizations
+- Datetime64 coordinate support with int64 views for fast hashing
+- Rust `aligned_binop_2d` for fused fill+operation in single pass
 
 ## Rust Acceleration (`rust/src/lib.rs`)
 
@@ -55,40 +57,32 @@ Functions:
 - `aligned_binop_2d` - Fused fill+op for 2D misaligned (row or col)
 - `scatter_add_2d_rows` - Scatter-add rows (unused currently)
 
-## Current API (34 methods/properties)
+## Current API
 
-### Core
-- `data`, `coords`, `dims`, `shape`, `name`, `values`, `T`
+### Module Functions
+- `concat(arrays, dim)` - Concatenate arrays along dimension
 
-### Selection
-- `sel(indexers)` - By labels (supports datetime strings)
-- `isel(indexers)` - By integer indices
-
-### Arithmetic (with alignment)
-- `+`, `-`, `*`, `/`, `**`, unary `-`
-
-### Reductions  
-- `sum`, `mean`, `min`, `max`, `std`, `prod`
-
-### Shape
-- `transpose`, `squeeze`, `expand_dims`, `broadcast_like`
-
-### Other
-- `where`, `clip`, `fillna`, `dropna`, `rename`, `copy`, `astype`
-- Comparison ops: `==`, `!=`, `<`, `<=`, `>`, `>=`
+### Array Methods/Properties (32 total)
+**Core**: `data`, `coords`, `dims`, `shape`, `name`, `values`, `T`
+**Selection**: `sel`, `isel`
+**Arithmetic**: `+`, `-`, `*`, `/`, `**`, unary `-`
+**Reductions**: `sum`, `mean`, `min`, `max`, `std`, `prod`
+**Cumulative**: `diff`, `cumsum`, `cumprod`, `argmax`, `argmin`
+**Shape**: `transpose`, `squeeze`, `expand_dims`, `broadcast_like`
+**Other**: `where`, `clip`, `fillna`, `dropna`, `rename`, `copy`, `astype`, `equals`
+**Comparison**: `==`, `!=`, `<`, `<=`, `>`, `>=`
 
 ## Test Coverage
 
-- **172 tests** across 15 test files
+- **196 tests** across 17 test files
 - All passing
-
 
 ## Potential Future Optimizations
 
 1. `aligned_binop_nd` - Generalize to N dimensions in Rust
 2. `coord_union_sorted` - Fast union for sorted coords in Rust
 3. Parallel Rust with rayon for arrays >1M elements
-4. `sel` batch operations in Rust
+4. `groupby` / `rolling` window operations
 
 ## Development Commands
 
@@ -108,13 +102,13 @@ cd rust && maturin develop --release
 
 ```
 src/nimblend/
-├── __init__.py     # Exports Array
-├── core.py         # Array class (~1200 lines)
+├── __init__.py     # Exports Array, concat
+├── core.py         # Array class (~1400 lines)
 └── _accel.py       # Rust bindings with NumPy fallback
 
 rust/src/lib.rs     # Rust acceleration functions
 benchmarks/         # Performance comparison scripts
-tests/              # 15 test files, 172 tests
+tests/              # 17 test files, 196 tests
 ```
 
 ## Key Design Decisions
