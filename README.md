@@ -1,202 +1,155 @@
-# NimbleNd: Efficient Labeled N-Dimensional Arrays with Flexible Alignment
+# Nimblend: Labeled N-Dimensional Arrays with Outer-Join Alignment
 
-NimbleNd (`nimblend`) is a Python library for working with labeled N-dimensional arrays. It provides a flexible and intuitive interface for data manipulation with automatic coordinate alignment, lazy computation, and various storage backends.
+Nimblend is a lightweight Python library for labeled N-dimensional arrays. It solves a specific problem in energy system modeling: when combining data from different sources, missing combinations should contribute zero to calculations, not propagate as NaN.
 
-## Features
+## The Problem
 
-- **Labeled Dimensions**: Access your data using meaningful dimension names and coordinate values
-- **Automatic Coordinate Alignment**: Operations between arrays automatically align their coordinates
-- **Lazy Computation**: Optional integration with Dask for out-of-core processing of large datasets
-- **Multiple Storage Backends**:
-  - Zarr: For efficient chunked, compressed, N-dimensional arrays
-  - IceChunk: For versioned, distributed storage with transactional semantics
-- **Data Format Interoperability**:
-  - Convert to/from pandas and polars Series/DataFrames
-  - Preserve coordinate information during conversion
+In energy modeling, you often combine arrays with different coordinate coverage:
+
+```python
+# Generation capacity by region and technology
+capacity = Array(...)  # regions: ['DE', 'FR'], techs: ['solar', 'wind']
+
+# Capacity factors (efficiency) by technology  
+cf = Array(...)        # techs: ['solar', 'wind', 'gas']
+
+# Calculate potential generation
+generation = capacity * cf
+```
+
+With standard tools like xarray, mismatched coordinates produce NaN values that cascade through calculations. In energy models, a missing combination typically means "zero capacity" or "not applicable" - a valid numeric value, not missing data.
+
+## The Solution
+
+Nimblend uses **outer-join alignment** with **zero-fill**:
+
+1. **Outer join**: Results contain the union of all coordinates from both arrays
+2. **Zero fill**: Missing values become 0, not NaN
+
+This means:
+
+- `solar_DE + wind_FR = solar_DE + wind_FR` (both preserved)
+- `solar_DE * gas_DE = 0` (gas_DE doesn't exist in capacity, so 0 × anything = 0)
 
 ## Installation
-
-Basic installation with minimal dependencies:
 
 ```bash
 pip install nimblend
 ```
 
-With optional features:
-
-```bash
-# For lazy computation with Dask
-pip install nimblend[dask]
-
-# For Zarr storage
-pip install nimblend[io]
-
-# For IceChunk support
-pip install nimblend[icechunk]
-
-# For pandas integration
-pip install nimblend[pandas]
-
-# For polars integration
-pip install nimblend[polars]
-
-# Install all optional dependencies
-pip install nimblend[all]
-```
+Requires only NumPy.
 
 ## Quick Start
 
-### Creating and Manipulating Arrays
-
 ```python
 import numpy as np
 from nimblend import Array
 
-# Create an array with labeled dimensions
-data = np.array([[1, 2, 3], [4, 5, 6]])
-coords = {"x": ["a", "b"], "y": [10, 20, 30]}
-arr = Array(data, coords)
+# Create arrays with different regional coverage
+de_fr_data = np.array([[100, 200], [150, 250]])
+arr1 = Array(de_fr_data, {
+    'region': ['DE', 'FR'],
+    'year': [2020, 2030]
+})
 
-# Access data by coordinate values
-subset = arr[{"x": "a", "y": [10, 20]}]
-print(subset.data)  # array([[1, 2]])
+fr_es_data = np.array([[10, 20], [15, 25]])
+arr2 = Array(fr_es_data, {
+    'region': ['FR', 'ES'],
+    'year': [2020, 2030]
+})
 
-# Mathematical operations
-arr2 = arr * 2
-print(arr2.data)  # array([[2, 4, 6], [8, 10, 12]])
+# Addition: outer join preserves all regions
+result = arr1 + arr2
+print(result.coords['region'])  # ['DE', 'ES', 'FR']
+
+# Result breakdown:
+# DE: [100, 200] + [0, 0]   = [100, 200]  (arr2 has no DE)
+# ES: [0, 0]     + [15, 25] = [15, 25]    (arr1 has no ES)
+# FR: [150, 250] + [10, 20] = [160, 270]  (both have FR)
 ```
 
-### Automatic Coordinate Alignment
+## Dimension Order Independence
+
+Arrays can have dimensions in any order. Nimblend aligns by dimension name, not position:
 
 ```python
-# Create two arrays with different coordinates
-data1 = np.array([[1, 2], [3, 4]])
-coords1 = {"x": ["a", "b"], "y": [0, 1]}
-arr1 = Array(data1, coords1)
+# Same data, different dimension order
+arr1 = Array(data, {'region': r, 'tech': t, 'year': y})  # shape: (3, 4, 5)
+arr2 = Array(data, {'tech': t, 'region': r, 'year': y})  # shape: (4, 3, 5)
 
-data2 = np.array([[10, 20, 30], [40, 50, 60]])
-coords2 = {"x": ["b", "c"], "y": [0, 1, 2]}
-arr2 = Array(data2, coords2)
-
-# Operation automatically aligns coordinates
-result = arr1 + arr2  # Handles different dimension sizes
-print(result.dims)    # ['x', 'y']
-print(result.coords)  # {'x': array(['a', 'b', 'c']), 'y': array([0, 1, 2])}
+result = arr1 + arr2  # Aligns by name, not position
 ```
 
-### Lazy Computation with Dask
+This prevents subtle bugs when combining data from different sources that happen to structure dimensions differently.
+
+## Operations
+
+### Binary Operations with Alignment
+
+All binary operations trigger automatic alignment:
 
 ```python
-import numpy as np
-from nimblend import Array
-
-# Create a large array with lazy computation
-shape = (1000, 1000)
-coords = {"x": np.arange(shape[0]), "y": np.arange(shape[1])}
-
-# Create with lazy computation (requires dask[array])
-array = Array(np.ones(shape), coords, chunks="auto")
-
-# Operations remain lazy until compute() is called
-result = (array * 2 + 10).sum(dim="x")
-print(result.is_lazy)  # True
-
-# Compute the result when needed
-computed = result.compute()
-print(computed.is_lazy)  # False
+result = arr1 + arr2   # Addition
+result = arr1 - arr2   # Subtraction  
+result = arr1 * arr2   # Multiplication (0 where either is missing)
+result = arr1 / arr2   # Division (caution: 0/0 = nan, x/0 = inf)
 ```
 
-## Storage Options
+### Scalar Operations
 
-### Zarr Storage
+Scalars apply element-wise without alignment:
 
 ```python
-from nimblend import Array, to_zarr, from_zarr
-
-# Create an array
-data = np.random.rand(100, 200)
-coords = {"time": np.arange(100), "space": np.arange(200)}
-array = Array(data, coords)
-
-# Save to Zarr format
-to_zarr(array, "my_array.zarr")
-
-# Load from Zarr (optionally as a lazy array)
-loaded = from_zarr("my_array.zarr", chunks="auto")
+result = arr * 2.5     # Multiply all values
+result = arr + 100     # Add to all values
+result = arr ** 2      # Square all values
 ```
 
-### IceChunk Storage (Versioned)
+### Reductions
+
+Sum over dimensions to aggregate:
 
 ```python
-import icechunk
-from nimblend import Array, to_icechunk, from_icechunk
-
-# Create icechunk repository and session
-storage = icechunk.local_filesystem_storage("repo")
-repo = icechunk.Repository.open_or_create(storage)
-session = repo.writable_session("main")
-
-# Store array in icechunk
-array = Array(np.random.rand(10, 20), {"x": range(10), "y": range(20)})
-to_icechunk(array, session, group="my_data")
-session.commit("Initial data")
-
-# Modify and store new version
-modified = array * 10
-session2 = repo.writable_session("main")
-to_icechunk(modified, session2, group="my_data", mode="a")
-session2.commit("Modified data")
-
-# Load latest version
-latest = repo.readonly_session("main")
-loaded = from_icechunk(latest, group="my_data")
+total = arr.sum()                      # Sum everything → scalar
+by_region = arr.sum('year')            # Sum over year → Array
+by_year = arr.sum(['region', 'tech'])  # Sum over multiple → Array
 ```
 
-## Integration with Pandas and Polars
+## Comparison with xarray
 
-```python
-import pandas as pd
-from nimblend import from_series, to_series
+| Aspect | xarray | Nimblend |
+|--------|--------|----------|
+| Alignment | Inner join (intersection) | Outer join (union) |
+| Missing values | NaN | 0 |
+| Dependencies | Heavy (pandas, etc.) | NumPy only |
+| Use case | General scientific data | Energy system modeling |
 
-# Create a pandas Series with MultiIndex
-idx = pd.MultiIndex.from_product(
-    [["A", "B"], [1, 2, 3]],
-    names=["dim_x", "dim_y"]
-)
-series = pd.Series(np.random.rand(6), index=idx, name="values")
+xarray is excellent for scientific data where NaN correctly represents "no measurement". Nimblend is designed for modeling scenarios where missing means "zero contribution".
 
-# Convert to NimbleNd Array
-array = from_series(series)
-print(array.dims)  # ['dim_x', 'dim_y']
+## API Reference
 
-# Perform operations
-result = array * 100
+### Array(data, coords, dims=None, name=None)
 
-# Convert back to pandas Series
-new_series = to_series(result, format="pandas")
+Create a labeled array.
 
-# Also works with polars (with nimblend[polars] installed)
-pl_series = to_series(result, format="polars")
-```
+**Parameters:**
 
-## What Makes NimbleNd Different?
+- `data`: NumPy array with the values
+- `coords`: Dict mapping dimension names to coordinate arrays
+- `dims`: Optional list specifying dimension order (defaults to coords key order)
+- `name`: Optional string name for the array
 
-- **Simplicity**: Clean, intuitive API focused on ease of use
-- **Flexibility**: Works with various array types, including eager (NumPy) and lazy (Dask)
-- **Coordinate Alignment**: Automatic alignment of coordinates during operations
-- **Storage Options**: Multiple storage backends with consistent APIs
-- **Interoperability**: Smooth conversion between popular data formats
+**Properties:**
 
-## Dependencies
+- `shape`: Tuple of dimension sizes
+- `dims`: List of dimension names  
+- `coords`: Dict of coordinate arrays
+- `data`: The underlying NumPy array
 
-- Required: `numpy>=2.2.4`
-- Optional:
-  - Dask: `dask[array]>=2025.1.0`
-  - Zarr storage: `zarr>=3.0.4`
-  - IceChunk: `icechunk>=0.2.12`
-  - Pandas integration: `pandas>=2.0.0`
-  - Polars integration: `polars>=1.26.0`
+**Methods:**
+
+- `sum(dim=None)`: Sum over dimension(s)
 
 ## License
 
-NimbleNd is released under the MIT License.
+MIT License

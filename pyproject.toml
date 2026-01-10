@@ -22,18 +22,13 @@ keywords = [
     "labeled",
     "alignment",
     "multidimensional",
-    "dask",
 ]
 dependencies = ["numpy>=2.2.4"]
 requires-python = ">=3.11"
 
 [project.optional-dependencies]
-io = ["zarr>=3.0.4"]
-dask = ["dask[array]>=2025.1.0"]
-icechunk = ["icechunk>=0.2.12", "zarr>=3.0.4", "dask[array]>=2025.1.0"]
-pandas = ["pandas>=2.0.0"]
-polars = ["polars>=1.26.0"]
-all = ["nimblend[io,dask,icechunk,pandas,polars]"]
+test = ["pytest>=7.0.0", "xarray>=2024.1.0"]
+dev = ["ruff>=0.1.0", "pytest>=7.0.0", "xarray>=2024.1.0"]
 
 [project.urls]
 "Homepage" = "https://github.com/cdgaete/nimblend"
@@ -41,3 +36,18 @@ all = ["nimblend[io,dask,icechunk,pandas,polars]"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+ignore = []

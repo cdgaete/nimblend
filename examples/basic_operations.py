@@ -22,7 +22,3 @@ result = arr1 + arr2
 print("\nResult of addition (with automatic alignment):")
 print(result.data)
 print(result.coords)
-
-# Create a lazy array with Dask
-lazy_arr = Array(data1, coords1, chunks="auto")
-print(f"\nIs lazy array?: {lazy_arr.is_lazy}")  # True if dask is installed
