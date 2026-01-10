@@ -346,3 +346,41 @@ class Array:
             return result_data.item() if result_data.ndim == 0 else result_data
 
         return Array(result_data, result_coords, result_dims, self.name)
+
+
+    def transpose(self, *dims: str) -> "Array":
+        """
+        Reorder dimensions.
+
+        Parameters
+        ----------
+        *dims : str
+            New dimension order. Must include all dimensions.
+
+        Returns
+        -------
+        Array
+            Array with reordered dimensions.
+
+        Examples
+        --------
+        >>> arr.transpose('y', 'x')  # Swap x and y
+        >>> arr.T  # Reverse all dimensions
+        """
+        if not dims:
+            # Reverse order like numpy .T
+            dims = tuple(reversed(self.dims))
+
+        if set(dims) != set(self.dims):
+            raise ValueError(f"Must include all dims. Got {dims}, need {self.dims}")
+
+        axes = [self.dims.index(d) for d in dims]
+        new_data = np.transpose(self.data, axes)
+        new_coords = {d: self.coords[d] for d in dims}
+
+        return Array(new_data, new_coords, list(dims), self.name)
+
+    @property
+    def T(self) -> "Array":
+        """Transpose: reverse dimension order."""
+        return self.transpose()
