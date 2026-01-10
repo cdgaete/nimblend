@@ -2,8 +2,9 @@
 
 import numpy as np
 import pytest
-from nimblend import Array
 from numpy.testing import assert_array_equal
+
+from nimblend import Array
 
 
 class TestGetitemDictSelection:

@@ -669,3 +669,42 @@ class Array:
                 return self.isel({first_dim: list(indices)})
 
         raise TypeError(f"Invalid index type: {type(key).__name__}")
+
+    def where(
+        self, cond: Union["Array", np.ndarray], other: Union["Array", int, float] = 0
+    ) -> "Array":
+        """
+        Replace values where condition is False.
+
+        Parameters
+        ----------
+        cond : Array or np.ndarray
+            Boolean condition. Where True, keep original values.
+            Where False, replace with `other`.
+        other : Array, int, or float, optional
+            Replacement value(s). Default is 0.
+
+        Returns
+        -------
+        Array
+            Array with replaced values.
+
+        Examples
+        --------
+        >>> arr.where(arr > 0, 0)      # Replace negatives with 0
+        >>> arr.where(arr < 100, 100)  # Cap values at 100
+        """
+        # Extract data from Array conditions
+        if isinstance(cond, Array):
+            cond_data = cond.data
+        else:
+            cond_data = np.asarray(cond)
+
+        # Extract data from Array other
+        if isinstance(other, Array):
+            other_data = other.data
+        else:
+            other_data = other
+
+        result_data = np.where(cond_data, self.data, other_data)
+        return Array(result_data, self.coords, self.dims, self.name)
