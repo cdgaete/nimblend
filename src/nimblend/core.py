@@ -384,3 +384,76 @@ class Array:
     def T(self) -> "Array":
         """Transpose: reverse dimension order."""
         return self.transpose()
+
+
+    def squeeze(self, dim: Optional[str] = None) -> "Array":
+        """
+        Remove dimensions of size 1.
+
+        Parameters
+        ----------
+        dim : str, optional
+            Specific dimension to squeeze. If None, squeeze all size-1 dims.
+
+        Returns
+        -------
+        Array
+            Array with size-1 dimensions removed.
+        """
+        if dim is not None:
+            if dim not in self.dims:
+                raise KeyError(f"Dimension '{dim}' not found")
+            if len(self.coords[dim]) != 1:
+                raise ValueError(f"Dimension '{dim}' has size {len(self.coords[dim])}")
+            axis = self.dims.index(dim)
+            new_data = np.squeeze(self.data, axis=axis)
+            new_dims = [d for d in self.dims if d != dim]
+            new_coords = {d: self.coords[d] for d in new_dims}
+            return Array(new_data, new_coords, new_dims, self.name)
+
+        # Squeeze all size-1 dimensions
+        new_dims = []
+        new_coords = {}
+        axes_to_squeeze = []
+
+        for i, dim in enumerate(self.dims):
+            if len(self.coords[dim]) == 1:
+                axes_to_squeeze.append(i)
+            else:
+                new_dims.append(dim)
+                new_coords[dim] = self.coords[dim]
+
+        new_data = self.data
+        for axis in reversed(axes_to_squeeze):
+            new_data = np.squeeze(new_data, axis=axis)
+
+        return Array(new_data, new_coords, new_dims, self.name)
+
+    def expand_dims(self, dim: str, coord: any = None) -> "Array":
+        """
+        Add a new dimension of size 1.
+
+        Parameters
+        ----------
+        dim : str
+            Name for the new dimension.
+        coord : any, optional
+            Coordinate value for the new dimension. Defaults to 0.
+
+        Returns
+        -------
+        Array
+            Array with new dimension added at the front.
+        """
+        if dim in self.dims:
+            raise ValueError(f"Dimension '{dim}' already exists")
+
+        if coord is None:
+            coord = 0
+
+        new_data = np.expand_dims(self.data, axis=0)
+        new_dims = [dim] + list(self.dims)
+        new_coords = {dim: np.array([coord])}
+        new_coords.update(self.coords)
+
+        return Array(new_data, new_coords, new_dims, self.name)
