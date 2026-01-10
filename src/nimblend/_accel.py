@@ -12,6 +12,7 @@ To build the Rust extension:
 Functions provided:
     - map_coords_to_indices: Build index mapping between coordinate arrays
     - fill_expanded_2d: Fill 2D expanded array at specified indices
+    - fill_expanded_nd: Fill ND expanded array at specified indices
 """
 
 import numpy as np
@@ -22,7 +23,7 @@ try:
         fill_expanded_2d_f64 as _rust_fill_2d,
     )
     from nimblend_rust import (
-        fill_expanded_nd_f64 as _rust_fill_nd,
+        fill_expanded_nd_from_indices as _rust_fill_nd_indices,
     )
     from nimblend_rust import (
         map_coords_to_indices as _rust_map_coords,
@@ -36,18 +37,13 @@ def map_coords_to_indices(
     source_coords: np.ndarray,
     target_coords: np.ndarray,
 ) -> np.ndarray:
-    """
-    Map source coordinates to their indices in target coordinates.
-
-    Returns array of indices where each source coord appears in target.
-    """
+    """Map source coordinates to their indices in target coordinates."""
     if HAS_RUST:
         return _rust_map_coords(
             source_coords.tolist(),
             target_coords.tolist(),
         )
     else:
-        # Pure NumPy fallback
         target_to_idx = {v: i for i, v in enumerate(target_coords)}
         return np.array([target_to_idx.get(v, -1) for v in source_coords])
 
@@ -58,11 +54,7 @@ def fill_expanded_2d(
     row_indices: np.ndarray,
     col_indices: np.ndarray,
 ) -> None:
-    """
-    Fill expanded 2D array with source data at specified indices.
-
-    Modifies expanded in place.
-    """
+    """Fill expanded 2D array with source data at specified indices."""
     if HAS_RUST and expanded.dtype == np.float64:
         _rust_fill_2d(
             expanded,
@@ -71,7 +63,6 @@ def fill_expanded_2d(
             col_indices.astype(np.int64),
         )
     else:
-        # Pure NumPy fallback using meshgrid
         idx_arrays = np.meshgrid(row_indices, col_indices, indexing="ij")
         expanded[tuple(idx_arrays)] = source
 
@@ -81,24 +72,25 @@ def fill_expanded_nd(
     source: np.ndarray,
     index_arrays: list,
 ) -> None:
-    """
-    Fill expanded ND array with source data.
+    """Fill expanded ND array with source data at specified indices."""
+    if HAS_RUST and expanded.dtype == np.float64:
+        # Compute strides for the expanded array
+        strides = []
+        stride = 1
+        for s in reversed(expanded.shape):
+            strides.append(stride)
+            stride *= s
+        strides = list(reversed(strides))
 
-    Uses flat indexing for Rust acceleration.
-    """
-    if HAS_RUST and expanded.dtype == np.float64 and expanded.ndim <= 4:
-        # Compute flat indices
-        mesh = np.meshgrid(*index_arrays, indexing="ij")
-        flat_idx = np.ravel_multi_index(
-            [m.ravel() for m in mesh],
-            expanded.shape,
-        )
-        _rust_fill_nd(
+        # Convert index arrays to int64
+        idx_arrays_i64 = [idx.astype(np.int64) for idx in index_arrays]
+
+        _rust_fill_nd_indices(
             expanded.ravel(),
             source.ravel().astype(np.float64),
-            flat_idx.astype(np.int64),
+            idx_arrays_i64,
+            strides,
         )
     else:
-        # Pure NumPy fallback
         idx_arrays = np.meshgrid(*index_arrays, indexing="ij")
         expanded[tuple(idx_arrays)] = source

@@ -234,19 +234,12 @@ class Array:
             expanded[tuple(slices_or_indices)] = data_to_assign
         else:
             # Slow path: advanced indexing
-            # Try Rust acceleration for 2D float64 arrays
+            # Try Rust acceleration for float64 arrays
             from nimblend._accel import HAS_RUST
 
-            use_rust = (
-                HAS_RUST
-                and expanded.ndim == 2
-                and expanded.dtype == np.float64
-                and len(slices_or_indices) == 2
-            )
+            use_rust = HAS_RUST and expanded.dtype == np.float64
 
             if use_rust:
-                from nimblend._accel import fill_expanded_2d
-
                 # Convert slices to index arrays for Rust
                 idx_arrays = []
                 for i, s in enumerate(slices_or_indices):
@@ -258,12 +251,23 @@ class Array:
                     else:
                         idx_arrays.append(s.astype(np.int64))
 
-                fill_expanded_2d(
-                    expanded,
-                    data_to_assign.astype(np.float64),
-                    idx_arrays[0],
-                    idx_arrays[1],
-                )
+                if expanded.ndim == 2:
+                    from nimblend._accel import fill_expanded_2d
+
+                    fill_expanded_2d(
+                        expanded,
+                        data_to_assign.astype(np.float64),
+                        idx_arrays[0],
+                        idx_arrays[1],
+                    )
+                else:
+                    from nimblend._accel import fill_expanded_nd
+
+                    fill_expanded_nd(
+                        expanded,
+                        data_to_assign.astype(np.float64),
+                        idx_arrays,
+                    )
             else:
                 # Pure NumPy fallback with meshgrid
                 idx_lists = []

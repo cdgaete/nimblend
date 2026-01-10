@@ -64,6 +64,61 @@ fn fill_expanded_2d_f64(
     Ok(())
 }
 
+/// Fill expanded ND array using per-dimension index arrays.
+/// Computes flat indices internally and fills the expanded array.
+/// 
+/// This avoids the Python overhead of meshgrid by computing indices in Rust.
+#[pyfunction]
+fn fill_expanded_nd_from_indices(
+    _py: Python<'_>,
+    expanded: &Bound<'_, PyArray1<f64>>,
+    source: PyReadonlyArray1<'_, f64>,
+    index_arrays: Vec<PyReadonlyArray1<'_, i64>>,
+    expanded_strides: Vec<i64>,
+) -> PyResult<()> {
+    let src = source.as_slice()?;
+    let n_elements = src.len();
+    
+    // Convert index arrays to slices
+    let idx_slices: Vec<&[i64]> = index_arrays
+        .iter()
+        .map(|arr| arr.as_slice())
+        .collect::<Result<Vec<_>, _>>()?;
+    
+    let ndim = idx_slices.len();
+    let strides: Vec<i64> = expanded_strides;
+    
+    // Get shape of source (product of index array lengths)
+    let shape: Vec<usize> = idx_slices.iter().map(|s| s.len()).collect();
+    
+    unsafe {
+        let mut exp = expanded.as_array_mut();
+        
+        // Iterate through all elements using mixed-radix counting
+        let mut coords = vec![0usize; ndim];
+        
+        for src_idx in 0..n_elements {
+            // Compute flat index in expanded array
+            let mut flat_idx: i64 = 0;
+            for d in 0..ndim {
+                flat_idx += idx_slices[d][coords[d]] * strides[d];
+            }
+            
+            exp[flat_idx as usize] = src[src_idx];
+            
+            // Increment coordinates (mixed-radix counter)
+            for d in (0..ndim).rev() {
+                coords[d] += 1;
+                if coords[d] < shape[d] {
+                    break;
+                }
+                coords[d] = 0;
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Fill expanded ND array - generic version using flat indices.
 /// Slower than specialized 2D but works for any dimensionality.
 #[pyfunction]
@@ -91,5 +146,6 @@ fn nimblend_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(map_coords_to_indices, m)?)?;
     m.add_function(wrap_pyfunction!(fill_expanded_2d_f64, m)?)?;
     m.add_function(wrap_pyfunction!(fill_expanded_nd_f64, m)?)?;
+    m.add_function(wrap_pyfunction!(fill_expanded_nd_from_indices, m)?)?;
     Ok(())
 }
