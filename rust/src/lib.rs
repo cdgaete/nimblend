@@ -3,19 +3,20 @@
 //! This module provides high-performance implementations of the hot paths
 //! identified in profiling: coordinate alignment and index mapping.
 
-use numpy::{PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray1, PyReadonlyArray2};
+use numpy::ndarray::Array1;
+use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods};
+use numpy::{PyReadonlyArray1, PyReadonlyArray2};
 use pyo3::prelude::*;
-use rayon::prelude::*;
 use std::collections::HashMap;
 
-/// Build a coordinate-to-index mapping from a numpy array of string coordinates.
+/// Build a coordinate-to-index mapping from string coordinates.
 /// Returns indices for each source coord in target coords.
 #[pyfunction]
-fn map_coords_to_indices(
-    py: Python<'_>,
+fn map_coords_to_indices<'py>(
+    py: Python<'py>,
     source_coords: Vec<String>,
     target_coords: Vec<String>,
-) -> PyResult<Bound<'_, PyArray1<i64>>> {
+) -> Bound<'py, PyArray1<i64>> {
     // Build target lookup
     let target_map: HashMap<&str, i64> = target_coords
         .iter()
@@ -29,13 +30,11 @@ fn map_coords_to_indices(
         .map(|s| *target_map.get(s.as_str()).unwrap_or(&-1))
         .collect();
 
-    Ok(PyArray1::from_vec(py, indices))
+    Array1::from_vec(indices).into_pyarray_bound(py)
 }
 
 /// Fill expanded 2D array with source data at specified row/col indices.
 /// This is the core hot path - replaces meshgrid + advanced indexing.
-///
-/// Uses parallel iteration with rayon for large arrays.
 #[pyfunction]
 fn fill_expanded_2d_f64(
     _py: Python<'_>,
@@ -53,30 +52,12 @@ fn fill_expanded_2d_f64(
         let mut exp = expanded.as_array_mut();
         let (nrows, ncols) = (src.nrows(), src.ncols());
 
-        // Parallel fill for large arrays
-        if nrows * ncols > 10000 {
-            // Collect updates first (can't mutate in parallel directly)
-            let updates: Vec<(usize, usize, f64)> = (0..nrows)
-                .into_par_iter()
-                .flat_map(|i| {
-                    let ri = row_idx[i] as usize;
-                    (0..ncols)
-                        .map(move |j| (ri, col_idx[j] as usize, src[[i, j]]))
-                        .collect::<Vec<_>>()
-                })
-                .collect();
-
-            for (r, c, v) in updates {
-                exp[[r, c]] = v;
-            }
-        } else {
-            // Sequential for small arrays
-            for i in 0..nrows {
-                let ri = row_idx[i] as usize;
-                for j in 0..ncols {
-                    let ci = col_idx[j] as usize;
-                    exp[[ri, ci]] = src[[i, j]];
-                }
+        // Simple sequential fill - avoids allocation overhead
+        for i in 0..nrows {
+            let ri = row_idx[i] as usize;
+            for j in 0..ncols {
+                let ci = col_idx[j] as usize;
+                exp[[ri, ci]] = src[[i, j]];
             }
         }
     }
@@ -88,8 +69,8 @@ fn fill_expanded_2d_f64(
 #[pyfunction]
 fn fill_expanded_nd_f64(
     _py: Python<'_>,
-    expanded: &Bound<'_, PyArray1<f64>>,  // Flattened view
-    source: PyReadonlyArray1<'_, f64>,     // Flattened source
+    expanded: &Bound<'_, PyArray1<f64>>,
+    source: PyReadonlyArray1<'_, f64>,
     flat_indices: PyReadonlyArray1<'_, i64>,
 ) -> PyResult<()> {
     let src = source.as_slice()?;

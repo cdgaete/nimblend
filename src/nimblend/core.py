@@ -233,21 +233,52 @@ class Array:
             # Fast path: use slice indexing (no copy, no meshgrid)
             expanded[tuple(slices_or_indices)] = data_to_assign
         else:
-            # Slow path: advanced indexing with meshgrid
-            # Convert slices to index arrays for meshgrid
-            idx_lists = []
-            for i, s in enumerate(slices_or_indices):
-                if isinstance(s, slice):
-                    dim = all_dims[i]
-                    if s.start is None and s.stop is None:
-                        idx_lists.append(np.arange(len(union_coords[dim])))
+            # Slow path: advanced indexing
+            # Try Rust acceleration for 2D float64 arrays
+            from nimblend._accel import HAS_RUST
+
+            use_rust = (
+                HAS_RUST
+                and expanded.ndim == 2
+                and expanded.dtype == np.float64
+                and len(slices_or_indices) == 2
+            )
+
+            if use_rust:
+                from nimblend._accel import fill_expanded_2d
+
+                # Convert slices to index arrays for Rust
+                idx_arrays = []
+                for i, s in enumerate(slices_or_indices):
+                    if isinstance(s, slice):
+                        dim = all_dims[i]
+                        start = s.start or 0
+                        stop = s.stop if s.stop is not None else len(union_coords[dim])
+                        idx_arrays.append(np.arange(start, stop, dtype=np.int64))
                     else:
-                        stop = s.stop or len(union_coords[dim])
-                        idx_lists.append(np.arange(s.start or 0, stop))
-                else:
-                    idx_lists.append(s)
-            idx_arrays = np.meshgrid(*idx_lists, indexing="ij")
-            expanded[tuple(idx_arrays)] = data_to_assign
+                        idx_arrays.append(s.astype(np.int64))
+
+                fill_expanded_2d(
+                    expanded,
+                    data_to_assign.astype(np.float64),
+                    idx_arrays[0],
+                    idx_arrays[1],
+                )
+            else:
+                # Pure NumPy fallback with meshgrid
+                idx_lists = []
+                for i, s in enumerate(slices_or_indices):
+                    if isinstance(s, slice):
+                        dim = all_dims[i]
+                        if s.start is None and s.stop is None:
+                            idx_lists.append(np.arange(len(union_coords[dim])))
+                        else:
+                            stop = s.stop or len(union_coords[dim])
+                            idx_lists.append(np.arange(s.start or 0, stop))
+                    else:
+                        idx_lists.append(s)
+                idx_arrays = np.meshgrid(*idx_lists, indexing="ij")
+                expanded[tuple(idx_arrays)] = data_to_assign
 
     def _binary_op(self, other: Union["Array", int, float], op: Callable) -> "Array":
         """
