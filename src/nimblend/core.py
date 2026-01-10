@@ -771,3 +771,34 @@ class Array:
                 return False
 
         return np.array_equal(self.data, other.data)
+
+    def broadcast_like(self, other: "Array") -> "Array":
+        """
+        Expand array to match another array's shape.
+
+        Uses outer-join alignment to broadcast self to match other's
+        dimensions. New dimensions are added with values broadcast
+        along them.
+
+        Parameters
+        ----------
+        other : Array
+            Target array whose shape to match.
+
+        Returns
+        -------
+        Array
+            Array broadcast to match other's dimensions and coordinates.
+
+        Examples
+        --------
+        >>> small.broadcast_like(large)
+        """
+        # Use alignment machinery - add self to zeros with other's shape
+        zeros = Array(
+            np.zeros(other.shape, dtype=self.data.dtype),
+            other.coords,
+            other.dims,
+            self.name,
+        )
+        return self + zeros
