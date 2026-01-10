@@ -140,6 +140,105 @@ fn fill_expanded_nd_f64(
     Ok(())
 }
 
+/// Add source data to result array at specified row indices (scatter-add).
+/// Used for outer-join addition: result[row_indices, :] += source
+#[pyfunction]
+fn scatter_add_2d_rows(
+    _py: Python<'_>,
+    result: &Bound<'_, PyArray2<f64>>,
+    source: PyReadonlyArray2<'_, f64>,
+    row_indices: PyReadonlyArray1<'_, i64>,
+) -> PyResult<()> {
+    let src = source.as_array();
+    let row_idx = row_indices.as_slice()?;
+
+    unsafe {
+        let mut res = result.as_array_mut();
+        let (nrows, ncols) = (src.nrows(), src.ncols());
+
+        for i in 0..nrows {
+            let ri = row_idx[i] as usize;
+            for j in 0..ncols {
+                res[[ri, j]] += src[[i, j]];
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Compute aligned binary operation on two 2D arrays with row index mappings.
+/// This combines fill + operation in a single pass, avoiding intermediate arrays.
+/// 
+/// result = zeros(result_shape)
+/// result[row_idx1, :] = source1
+/// result[row_idx2, :] += source2  (for add, or op for other operations)
+#[pyfunction]
+fn aligned_binop_2d(
+    _py: Python<'_>,
+    result: &Bound<'_, PyArray2<f64>>,
+    source1: PyReadonlyArray2<'_, f64>,
+    row_indices1: PyReadonlyArray1<'_, i64>,
+    source2: PyReadonlyArray2<'_, f64>,
+    row_indices2: PyReadonlyArray1<'_, i64>,
+    op: &str,
+) -> PyResult<()> {
+    let src1 = source1.as_array();
+    let src2 = source2.as_array();
+    let row_idx1 = row_indices1.as_slice()?;
+    let row_idx2 = row_indices2.as_slice()?;
+
+    unsafe {
+        let mut res = result.as_array_mut();
+        let ncols = src1.ncols();
+
+        // Fill from source1
+        for (i, &ri) in row_idx1.iter().enumerate() {
+            let ri = ri as usize;
+            for j in 0..ncols {
+                res[[ri, j]] = src1[[i, j]];
+            }
+        }
+
+        // Apply operation with source2
+        match op {
+            "add" => {
+                for (i, &ri) in row_idx2.iter().enumerate() {
+                    let ri = ri as usize;
+                    for j in 0..ncols {
+                        res[[ri, j]] += src2[[i, j]];
+                    }
+                }
+            }
+            "sub" => {
+                for (i, &ri) in row_idx2.iter().enumerate() {
+                    let ri = ri as usize;
+                    for j in 0..ncols {
+                        res[[ri, j]] -= src2[[i, j]];
+                    }
+                }
+            }
+            "mul" => {
+                for (i, &ri) in row_idx2.iter().enumerate() {
+                    let ri = ri as usize;
+                    for j in 0..ncols {
+                        res[[ri, j]] *= src2[[i, j]];
+                    }
+                }
+            }
+            "div" => {
+                for (i, &ri) in row_idx2.iter().enumerate() {
+                    let ri = ri as usize;
+                    for j in 0..ncols {
+                        res[[ri, j]] /= src2[[i, j]];
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
 /// Python module definition
 #[pymodule]
 fn nimblend_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -147,5 +246,7 @@ fn nimblend_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(fill_expanded_2d_f64, m)?)?;
     m.add_function(wrap_pyfunction!(fill_expanded_nd_f64, m)?)?;
     m.add_function(wrap_pyfunction!(fill_expanded_nd_from_indices, m)?)?;
+    m.add_function(wrap_pyfunction!(scatter_add_2d_rows, m)?)?;
+    m.add_function(wrap_pyfunction!(aligned_binop_2d, m)?)?;
     Ok(())
 }

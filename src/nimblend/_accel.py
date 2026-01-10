@@ -20,6 +20,9 @@ import numpy as np
 # Try to import Rust extension
 try:
     from nimblend_rust import (
+        aligned_binop_2d as _rust_aligned_binop_2d,
+    )
+    from nimblend_rust import (
         fill_expanded_2d_f64 as _rust_fill_2d,
     )
     from nimblend_rust import (
@@ -31,6 +34,44 @@ try:
     HAS_RUST = True
 except ImportError:
     HAS_RUST = False
+
+
+# Re-export for use in core.py
+def aligned_binop_2d(
+    result: np.ndarray,
+    source1: np.ndarray,
+    row_indices1: np.ndarray,
+    source2: np.ndarray,
+    row_indices2: np.ndarray,
+    op: str,
+) -> None:
+    """
+    Compute aligned binary operation on two 2D arrays with row index mappings.
+
+    result = zeros(result_shape)
+    result[row_idx1, :] = source1
+    result[row_idx2, :] op= source2
+    """
+    if HAS_RUST:
+        _rust_aligned_binop_2d(
+            result,
+            source1,
+            row_indices1.astype(np.int64),
+            source2,
+            row_indices2.astype(np.int64),
+            op,
+        )
+    else:
+        # Pure NumPy fallback
+        result[row_indices1, :] = source1
+        if op == "add":
+            result[row_indices2, :] += source2
+        elif op == "sub":
+            result[row_indices2, :] -= source2
+        elif op == "mul":
+            result[row_indices2, :] *= source2
+        elif op == "div":
+            result[row_indices2, :] /= source2
 
 
 def map_coords_to_indices(

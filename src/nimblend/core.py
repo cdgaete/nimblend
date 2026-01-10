@@ -368,25 +368,123 @@ class Array:
 
         raise TypeError(f"Unsupported type: {type(other)}")
 
+    def _fast_aligned_binop_2d(
+        self, other: "Array", op_name: str
+    ) -> Optional["Array"]:
+        """
+        Fast path for 2D arrays where only one dimension is misaligned.
+
+        Uses Rust accelerated aligned_binop_2d which combines fill + operation
+        in a single pass, avoiding intermediate array allocation.
+
+        Returns None if conditions not met (falls back to generic path).
+        """
+        # Check conditions
+        if self.data.ndim != 2 or other.data.ndim != 2:
+            return None
+        if self.dims != other.dims:
+            return None
+        if self.data.dtype != np.float64 or other.data.dtype != np.float64:
+            return None
+
+        # Check: exactly one dimension misaligned, other dimension identical
+        dim0, dim1 = self.dims
+        coords_match_0 = np.array_equal(self.coords[dim0], other.coords[dim0])
+        coords_match_1 = np.array_equal(self.coords[dim1], other.coords[dim1])
+
+        if coords_match_0 and coords_match_1:
+            return None  # Fully aligned - use even faster path
+        if not coords_match_0 and not coords_match_1:
+            return None  # Both misaligned - need full alignment
+
+        # One dimension misaligned
+        from nimblend._accel import HAS_RUST
+
+        if not HAS_RUST:
+            return None
+
+        from nimblend._accel import aligned_binop_2d
+
+        if not coords_match_0:
+            # Dim 0 (rows) misaligned, dim 1 (cols) aligned
+            self_c = self.coords[dim0]
+            other_c = other.coords[dim0]
+
+            # Compute union coords
+            if np.issubdtype(self_c.dtype, np.datetime64):
+                self_set = set(self_c.view("int64"))
+                new_mask = ~np.isin(other_c.view("int64"), self_c.view("int64"))
+            else:
+                self_set = set(self_c)
+                new_mask = np.array([c not in self_set for c in other_c])
+
+            new_from_other = other_c[new_mask]
+            if len(new_from_other) > 0:
+                union_c0 = np.concatenate([self_c, new_from_other])
+            else:
+                union_c0 = self_c.copy()
+
+            # Build index mappings
+            if np.issubdtype(union_c0.dtype, np.datetime64):
+                u_view = union_c0.view("int64")
+                c2i = {v: i for i, v in enumerate(u_view)}
+                idx1 = np.array(
+                    [c2i[v] for v in self_c.view("int64")], dtype=np.int64
+                )
+                idx2 = np.array(
+                    [c2i[v] for v in other_c.view("int64")], dtype=np.int64
+                )
+            else:
+                c2i = {v: i for i, v in enumerate(union_c0)}
+                idx1 = np.array([c2i[v] for v in self_c], dtype=np.int64)
+                idx2 = np.array([c2i[v] for v in other_c], dtype=np.int64)
+
+            result = np.zeros((len(union_c0), self.data.shape[1]), dtype=np.float64)
+            aligned_binop_2d(result, self.data, idx1, other.data, idx2, op_name)
+
+            union_coords = {dim0: union_c0, dim1: self.coords[dim1].copy()}
+            return Array(result, union_coords, self.dims, self.name)
+
+        else:
+            # Dim 1 (cols) misaligned - transpose, compute, transpose back
+            # For now, fall back to generic path
+            return None
+
     def __add__(self, other):
+        if isinstance(other, Array):
+            result = self._fast_aligned_binop_2d(other, "add")
+            if result is not None:
+                return result
         return self._binary_op(other, lambda a, b: a + b)
 
     def __radd__(self, other):
         return self._binary_op(other, lambda a, b: b + a)
 
     def __sub__(self, other):
+        if isinstance(other, Array):
+            result = self._fast_aligned_binop_2d(other, "sub")
+            if result is not None:
+                return result
         return self._binary_op(other, lambda a, b: a - b)
 
     def __rsub__(self, other):
         return self._binary_op(other, lambda a, b: b - a)
 
     def __mul__(self, other):
+        if isinstance(other, Array):
+            result = self._fast_aligned_binop_2d(other, "mul")
+            if result is not None:
+                return result
         return self._binary_op(other, lambda a, b: a * b)
 
     def __rmul__(self, other):
         return self._binary_op(other, lambda a, b: b * a)
 
     def __truediv__(self, other):
+        if isinstance(other, Array):
+            result = self._fast_aligned_binop_2d(other, "div")
+            if result is not None:
+                return result
         return self._binary_op(other, lambda a, b: a / b)
 
     def __rtruediv__(self, other):
