@@ -116,6 +116,11 @@ class Array:
         """Shape of the underlying data array."""
         return self.data.shape
 
+    @property
+    def values(self) -> np.ndarray:
+        """Alias for data. Returns the underlying NumPy array."""
+        return self.data
+
     def __repr__(self) -> str:
         dims_str = ", ".join(f"{d}:{len(self.coords[d])}" for d in self.dims)
         return f"Array({self.shape}, [{dims_str}])"

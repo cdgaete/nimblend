@@ -107,3 +107,20 @@ class TestAstype:
         arr = Array(np.array([1, 2, 3]), {"x": ["a", "b", "c"]}, name="test")
 
         assert arr.astype(float).name == "test"
+
+
+class TestValues:
+    """Tests for values property."""
+
+    def test_values_returns_data(self):
+        """values returns the same as data."""
+        data = np.array([1, 2, 3])
+        arr = Array(data, {"x": ["a", "b", "c"]})
+
+        assert_array_equal(arr.values, arr.data)
+
+    def test_values_is_same_object(self):
+        """values is the same object as data."""
+        arr = Array(np.array([[1, 2], [3, 4]]), {"x": ["a", "b"], "y": [0, 1]})
+
+        assert arr.values is arr.data
