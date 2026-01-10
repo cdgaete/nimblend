@@ -8,14 +8,26 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import numpy as np
 
 
-def _normalize_label(label: Any, coord: np.ndarray) -> Any:
+def _normalize_label(label: Any, coord: np.ndarray, is_datetime: bool = None) -> Any:
     """
     Normalize a label to match the dtype of the coordinate array.
 
     Handles datetime conversion: strings and python dates are converted
     to numpy datetime64 when the coordinate has a datetime dtype.
+
+    Parameters
+    ----------
+    label : Any
+        The label to normalize.
+    coord : np.ndarray
+        The coordinate array to match dtype against.
+    is_datetime : bool, optional
+        If provided, skip the issubdtype check (optimization for batch calls).
     """
-    if not np.issubdtype(coord.dtype, np.datetime64):
+    if is_datetime is None:
+        is_datetime = np.issubdtype(coord.dtype, np.datetime64)
+
+    if not is_datetime:
         return label
 
     # Coordinate is datetime64 - normalize the label
@@ -26,6 +38,32 @@ def _normalize_label(label: Any, coord: np.ndarray) -> Any:
     elif isinstance(label, (date, datetime)):
         return np.datetime64(label).astype(coord.dtype)
     return label
+
+
+def _normalize_labels_batch(labels: list, coord: np.ndarray) -> list:
+    """
+    Normalize a batch of labels to match the coordinate dtype.
+
+    This is more efficient than calling _normalize_label repeatedly
+    because it checks the dtype once.
+    """
+    is_datetime = np.issubdtype(coord.dtype, np.datetime64)
+    if not is_datetime:
+        return labels
+
+    # Coordinate is datetime64 - normalize all labels
+    result = []
+    target_dtype = coord.dtype
+    for label in labels:
+        if isinstance(label, np.datetime64):
+            result.append(label.astype(target_dtype))
+        elif isinstance(label, str):
+            result.append(np.datetime64(label).astype(target_dtype))
+        elif isinstance(label, (date, datetime)):
+            result.append(np.datetime64(label).astype(target_dtype))
+        else:
+            result.append(label)
+    return result
 
 
 class Array:
@@ -599,14 +637,13 @@ class Array:
 
             axis = result_dims.index(dim)
             coord = result_coords[dim]
-            # Build index lookup - iterate numpy array directly to preserve types
-            coord_to_idx = {v: i for i, v in enumerate(coord)}
 
             if isinstance(labels, (list, np.ndarray)):
-                # Multiple labels: find indices and select
-                labels_list = labels if isinstance(labels, list) else labels.tolist()
+                # Multiple labels: build lookup dict (amortized over many labels)
+                coord_to_idx = {v: i for i, v in enumerate(coord)}
                 # Normalize labels to match coord dtype (handles datetime)
-                normalized = [_normalize_label(lbl, coord) for lbl in labels_list]
+                labels_list = labels if isinstance(labels, list) else labels.tolist()
+                normalized = _normalize_labels_batch(labels_list, coord)
                 missing = [lbl for lbl, norm in zip(labels_list, normalized)
                            if norm not in coord_to_idx]
                 if missing:
@@ -618,19 +655,37 @@ class Array:
                     )
                 indices = [coord_to_idx[norm] for norm in normalized]
                 result_data = np.take(result_data, indices, axis=axis)
-                # Store original labels (preserves user's input type)
                 result_coords[dim] = np.array([coord[i] for i in indices])
             else:
-                # Single label: reduce this dimension
+                # Single label: use searchsorted for sorted numeric/datetime arrays
                 normalized = _normalize_label(labels, coord)
-                if normalized not in coord_to_idx:
+                is_numeric = np.issubdtype(coord.dtype, np.number)
+                is_datetime = np.issubdtype(coord.dtype, np.datetime64)
+
+                idx = None
+                if (is_numeric or is_datetime) and len(coord) > 100:
+                    # Check if sorted (O(n) but amortized benefit for large arrays)
+                    if np.all(coord[:-1] <= coord[1:]):
+                        # Use binary search O(log n)
+                        pos = np.searchsorted(coord, normalized)
+                        if pos < len(coord) and coord[pos] == normalized:
+                            idx = pos
+
+                if idx is None:
+                    # Linear search fallback - avoid full dict for single lookup
+                    for i, v in enumerate(coord):
+                        if v == normalized:
+                            idx = i
+                            break
+
+                if idx is None:
                     available = coord.tolist()[:10]
                     raise ValueError(
                         f"Label '{labels}' not found in dimension '{dim}'. "
                         f"Available: {available}"
                         f"{'...' if len(coord) > 10 else ''}"
                     )
-                idx = coord_to_idx[normalized]
+
                 result_data = np.take(result_data, idx, axis=axis)
                 del result_coords[dim]
                 result_dims.remove(dim)
