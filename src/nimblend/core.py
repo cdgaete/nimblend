@@ -125,6 +125,19 @@ class Array:
         dims_str = ", ".join(f"{d}:{len(self.coords[d])}" for d in self.dims)
         return f"Array({self.shape}, [{dims_str}])"
 
+    def _coords_match(self, other: "Array") -> bool:
+        """Check if coordinates are identical (fast path optimization)."""
+        if self.dims != other.dims:
+            return False
+        for dim in self.dims:
+            sc = self.coords[dim]
+            oc = other.coords[dim]
+            if len(sc) != len(oc):
+                return False
+            if not np.array_equal(sc, oc):
+                return False
+        return True
+
     def _align_with(
         self, other: "Array"
     ) -> Tuple[np.ndarray, np.ndarray, Dict[str, np.ndarray], List[str]]:
@@ -195,19 +208,46 @@ class Array:
             if dim not in self.dims:
                 data_to_assign = np.expand_dims(data_to_assign, axis=i)
 
-        slices = []
+        # Check if we can use fast slice-based indexing (contiguous prefix)
+        slices_or_indices = []
+        can_use_slices = True
         for dim in all_dims:
             if dim in self.dims:
                 union_coord = union_coords[dim]
                 self_coord = self.coords[dim]
-                coord_to_idx = {v: i for i, v in enumerate(union_coord)}
-                indices = np.array([coord_to_idx[v] for v in self_coord])
-                slices.append(indices)
+                self_len = len(self_coord)
+                union_len = len(union_coord)
+                # Check if self_coord is a prefix of union_coord
+                prefix_match = np.array_equal(union_coord[:self_len], self_coord)
+                if self_len <= union_len and prefix_match:
+                    slices_or_indices.append(slice(0, self_len))
+                else:
+                    can_use_slices = False
+                    coord_to_idx = {v: i for i, v in enumerate(union_coord)}
+                    indices = np.array([coord_to_idx[v] for v in self_coord])
+                    slices_or_indices.append(indices)
             else:
-                slices.append(np.arange(len(union_coords[dim])))
+                slices_or_indices.append(slice(None))  # Full slice for new dims
 
-        idx_arrays = np.meshgrid(*slices, indexing="ij")
-        expanded[tuple(idx_arrays)] = data_to_assign
+        if can_use_slices:
+            # Fast path: use slice indexing (no copy, no meshgrid)
+            expanded[tuple(slices_or_indices)] = data_to_assign
+        else:
+            # Slow path: advanced indexing with meshgrid
+            # Convert slices to index arrays for meshgrid
+            idx_lists = []
+            for i, s in enumerate(slices_or_indices):
+                if isinstance(s, slice):
+                    dim = all_dims[i]
+                    if s.start is None and s.stop is None:
+                        idx_lists.append(np.arange(len(union_coords[dim])))
+                    else:
+                        stop = s.stop or len(union_coords[dim])
+                        idx_lists.append(np.arange(s.start or 0, stop))
+                else:
+                    idx_lists.append(s)
+            idx_arrays = np.meshgrid(*idx_lists, indexing="ij")
+            expanded[tuple(idx_arrays)] = data_to_assign
 
     def _binary_op(self, other: Union["Array", int, float], op: Callable) -> "Array":
         """
@@ -217,6 +257,12 @@ class Array:
             return Array(op(self.data, other), self.coords, self.dims, self.name)
 
         if isinstance(other, Array):
+            # Fast path: identical coordinates - skip alignment
+            if self._coords_match(other):
+                result_data = op(self.data, other.data)
+                return Array(result_data, self.coords, self.dims, self.name)
+
+            # Slow path: need alignment
             self_exp, other_exp, union_coords, all_dims = self._align_with(other)
             result_data = op(self_exp, other_exp)
             return Array(result_data, union_coords, all_dims, self.name)
@@ -357,28 +403,31 @@ class Array:
             axis = result_dims.index(dim)
             coord = result_coords[dim]
             coord_list = coord.tolist()
+            # Build index lookup once (O(n)) instead of repeated list.index() calls
+            coord_to_idx = {v: i for i, v in enumerate(coord_list)}
 
             if isinstance(labels, (list, np.ndarray)):
                 # Multiple labels: find indices and select
-                missing = [lbl for lbl in labels if lbl not in coord_list]
+                labels_list = labels if isinstance(labels, list) else labels.tolist()
+                missing = [lbl for lbl in labels_list if lbl not in coord_to_idx]
                 if missing:
                     raise ValueError(
                         f"Labels {missing} not found in dimension '{dim}'. "
                         f"Available: {coord_list[:10]}"
                         f"{'...' if len(coord_list) > 10 else ''}"
                     )
-                indices = [coord_list.index(lbl) for lbl in labels]
+                indices = [coord_to_idx[lbl] for lbl in labels_list]
                 result_data = np.take(result_data, indices, axis=axis)
-                result_coords[dim] = np.array(labels)
+                result_coords[dim] = np.array(labels_list)
             else:
                 # Single label: reduce this dimension
-                if labels not in coord_list:
+                if labels not in coord_to_idx:
                     raise ValueError(
                         f"Label '{labels}' not found in dimension '{dim}'. "
                         f"Available: {coord_list[:10]}"
                         f"{'...' if len(coord_list) > 10 else ''}"
                     )
-                idx = coord_list.index(labels)
+                idx = coord_to_idx[labels]
                 result_data = np.take(result_data, idx, axis=axis)
                 del result_coords[dim]
                 result_dims.remove(dim)
