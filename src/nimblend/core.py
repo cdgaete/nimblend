@@ -49,13 +49,21 @@ class Array:
         """Check that dimensions and coordinates match data shape."""
         if len(self.dims) != self.data.ndim:
             raise ValueError(
-                f"dims count ({len(self.dims)}) != data.ndim ({self.data.ndim})"
+                f"Dimension mismatch: got {len(self.dims)} dimension names "
+                f"{self.dims} but data has {self.data.ndim} dimensions "
+                f"with shape {self.data.shape}"
             )
         for i, dim in enumerate(self.dims):
+            if dim not in self.coords:
+                raise ValueError(
+                    f"Dimension '{dim}' not found in coords. "
+                    f"Available: {list(self.coords.keys())}"
+                )
             if len(self.coords[dim]) != self.data.shape[i]:
                 raise ValueError(
-                    f"Coord length for '{dim}' ({len(self.coords[dim])}) != "
-                    f"data shape[{i}] ({self.data.shape[i]})"
+                    f"Coordinate length mismatch for dimension '{dim}': "
+                    f"coords has {len(self.coords[dim])} values but "
+                    f"data has size {self.data.shape[i]} along axis {i}"
                 )
 
     @property
@@ -293,20 +301,36 @@ class Array:
 
         for dim, labels in indexers.items():
             if dim not in result_dims:
-                raise KeyError(f"Dimension '{dim}' not found")
+                raise KeyError(
+                    f"Dimension '{dim}' not found. "
+                    f"Available dimensions: {result_dims}"
+                )
 
             axis = result_dims.index(dim)
             coord = result_coords[dim]
+            coord_list = coord.tolist()
 
             if isinstance(labels, (list, np.ndarray)):
                 # Multiple labels: find indices and select
-                coord_list = coord.tolist()
+                missing = [lbl for lbl in labels if lbl not in coord_list]
+                if missing:
+                    raise ValueError(
+                        f"Labels {missing} not found in dimension '{dim}'. "
+                        f"Available: {coord_list[:10]}"
+                        f"{'...' if len(coord_list) > 10 else ''}"
+                    )
                 indices = [coord_list.index(lbl) for lbl in labels]
                 result_data = np.take(result_data, indices, axis=axis)
                 result_coords[dim] = np.array(labels)
             else:
                 # Single label: reduce this dimension
-                idx = coord.tolist().index(labels)
+                if labels not in coord_list:
+                    raise ValueError(
+                        f"Label '{labels}' not found in dimension '{dim}'. "
+                        f"Available: {coord_list[:10]}"
+                        f"{'...' if len(coord_list) > 10 else ''}"
+                    )
+                idx = coord_list.index(labels)
                 result_data = np.take(result_data, idx, axis=axis)
                 del result_coords[dim]
                 result_dims.remove(dim)
@@ -346,17 +370,32 @@ class Array:
 
         for dim, indices in indexers.items():
             if dim not in result_dims:
-                raise KeyError(f"Dimension '{dim}' not found")
+                raise KeyError(
+                    f"Dimension '{dim}' not found. "
+                    f"Available dimensions: {result_dims}"
+                )
 
             axis = result_dims.index(dim)
             coord = result_coords[dim]
+            dim_size = len(coord)
 
             if isinstance(indices, (list, np.ndarray)):
                 # Multiple indices: select and keep dimension
+                for idx in indices:
+                    if idx >= dim_size or idx < -dim_size:
+                        raise IndexError(
+                            f"Index {idx} out of bounds for dimension '{dim}' "
+                            f"with size {dim_size}"
+                        )
                 result_data = np.take(result_data, indices, axis=axis)
                 result_coords[dim] = coord[indices]
             else:
                 # Single index: reduce this dimension
+                if indices >= dim_size or indices < -dim_size:
+                    raise IndexError(
+                        f"Index {indices} out of bounds for dimension '{dim}' "
+                        f"with size {dim_size}"
+                    )
                 result_data = np.take(result_data, indices, axis=axis)
                 del result_coords[dim]
                 result_dims.remove(dim)
@@ -391,7 +430,15 @@ class Array:
             dims = tuple(reversed(self.dims))
 
         if set(dims) != set(self.dims):
-            raise ValueError(f"Must include all dims. Got {dims}, need {self.dims}")
+            missing = set(self.dims) - set(dims)
+            extra = set(dims) - set(self.dims)
+            msg = "Dimension mismatch in transpose: "
+            if missing:
+                msg += f"missing {missing}"
+            if extra:
+                msg += f"{', ' if missing else ''}unknown {extra}"
+            msg += f". Available: {self.dims}"
+            raise ValueError(msg)
 
         axes = [self.dims.index(d) for d in dims]
         new_data = np.transpose(self.data, axes)
@@ -421,9 +468,15 @@ class Array:
         """
         if dim is not None:
             if dim not in self.dims:
-                raise KeyError(f"Dimension '{dim}' not found")
+                raise KeyError(
+                    f"Dimension '{dim}' not found. "
+                    f"Available dimensions: {self.dims}"
+                )
             if len(self.coords[dim]) != 1:
-                raise ValueError(f"Dimension '{dim}' has size {len(self.coords[dim])}")
+                raise ValueError(
+                    f"Cannot squeeze dimension '{dim}': size is "
+                    f"{len(self.coords[dim])}, must be 1"
+                )
             axis = self.dims.index(dim)
             new_data = np.squeeze(self.data, axis=axis)
             new_dims = [d for d in self.dims if d != dim]
@@ -465,7 +518,10 @@ class Array:
             Array with new dimension added at the front.
         """
         if dim in self.dims:
-            raise ValueError(f"Dimension '{dim}' already exists")
+            raise ValueError(
+                f"Dimension '{dim}' already exists. "
+                f"Current dimensions: {self.dims}"
+            )
 
         if coord is None:
             coord = 0
