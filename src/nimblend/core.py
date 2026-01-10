@@ -2,7 +2,7 @@
 Labeled N-dimensional arrays with outer-join alignment and zero-fill for missing values.
 """
 
-from typing import Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
@@ -201,7 +201,7 @@ class Array:
         self,
         func: Callable,
         dim: Optional[Union[str, List[str]]] = None,
-    ) -> Union["Array", np.number]:
+    ) -> Union["Array", Any]:
         """Apply a reduction function over specified dimensions."""
         if dim is None:
             return func(self.data)
@@ -221,7 +221,7 @@ class Array:
 
         return Array(result_data, new_coords, new_dims, self.name)
 
-    def sum(self, dim: Optional[Union[str, List[str]]] = None) -> Union["Array", float]:
+    def sum(self, dim: Optional[Union[str, List[str]]] = None):
         """Sum over dimension(s). If None, sum all."""
         return self._reduce(np.sum, dim)
 
@@ -229,15 +229,15 @@ class Array:
         """Mean over dimension(s). If None, mean of all."""
         return self._reduce(np.mean, dim)
 
-    def min(self, dim: Optional[Union[str, List[str]]] = None) -> Union["Array", float]:
+    def min(self, dim: Optional[Union[str, List[str]]] = None):
         """Minimum over dimension(s). If None, min of all."""
         return self._reduce(np.min, dim)
 
-    def max(self, dim: Optional[Union[str, List[str]]] = None) -> Union["Array", float]:
+    def max(self, dim: Optional[Union[str, List[str]]] = None):
         """Maximum over dimension(s). If None, max of all."""
         return self._reduce(np.max, dim)
 
-    def std(self, dim: Optional[Union[str, List[str]]] = None) -> Union["Array", float]:
+    def std(self, dim: Optional[Union[str, List[str]]] = None):
         """Standard deviation over dimension(s). If None, std of all."""
         return self._reduce(np.std, dim)
 
@@ -246,8 +246,8 @@ class Array:
         return self._reduce(np.prod, dim)
 
     def sel(
-        self, indexers: Dict[str, Union[any, List]]
-    ) -> Union["Array", np.number]:
+        self, indexers: Dict[str, Union[Any, List]]
+    ) -> Union["Array", Any]:
         """
         Select data by coordinate labels.
 
@@ -300,7 +300,7 @@ class Array:
 
     def isel(
         self, indexers: Dict[str, Union[int, List[int]]]
-    ) -> Union["Array", np.number]:
+    ) -> Union["Array", Any]:
         """
         Select data by integer index positions.
 
@@ -429,7 +429,7 @@ class Array:
 
         return Array(new_data, new_coords, new_dims, self.name)
 
-    def expand_dims(self, dim: str, coord: any = None) -> "Array":
+    def expand_dims(self, dim: str, coord: Any = None) -> "Array":
         """
         Add a new dimension of size 1.
 
@@ -437,7 +437,7 @@ class Array:
         ----------
         dim : str
             Name for the new dimension.
-        coord : any, optional
+        coord : Any, optional
             Coordinate value for the new dimension. Defaults to 0.
 
         Returns
