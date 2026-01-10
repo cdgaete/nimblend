@@ -1529,3 +1529,91 @@ class Array:
         result_data = np.roll(self.data, shift_tuple, axis=axes)
 
         return Array(result_data, self.coords, self.dims, self.name)
+
+    def coarsen(
+        self, windows: Dict[str, int], func: str = "mean", boundary: str = "trim"
+    ) -> "Array":
+        """
+        Downsample by applying a function over fixed-size windows.
+
+        Parameters
+        ----------
+        windows : dict
+            Mapping of dimension names to window sizes.
+        func : str, optional
+            Aggregation function: 'mean', 'sum', 'min', 'max'. Default 'mean'.
+        boundary : str, optional
+            How to handle boundaries: 'trim' (drop incomplete windows) or
+            'pad' (pad with zeros). Default 'trim'.
+
+        Returns
+        -------
+        Array
+            Downsampled array with reduced dimensions.
+
+        Examples
+        --------
+        >>> arr.coarsen({'x': 2}, func='mean')  # Average every 2 x values
+        >>> arr.coarsen({'x': 3, 'y': 3}, func='sum')
+        """
+        for dim in windows:
+            if dim not in self.dims:
+                raise KeyError(
+                    f"Dimension '{dim}' not found. Available dimensions: {self.dims}"
+                )
+            if windows[dim] < 1:
+                raise ValueError(f"Window size must be >= 1, got {windows[dim]}")
+
+        if func not in ("mean", "sum", "min", "max"):
+            raise ValueError(
+                f"Unknown function '{func}'. Available: mean, sum, min, max"
+            )
+
+        result_data = self.data.copy()
+        result_coords = {d: c.copy() for d, c in self.coords.items()}
+
+        for dim, window in windows.items():
+            axis = self.dims.index(dim)
+            size = result_data.shape[axis]
+
+            if boundary == "trim":
+                n_windows = size // window
+                trim_size = n_windows * window
+                slices = [slice(None)] * result_data.ndim
+                slices[axis] = slice(0, trim_size)
+                result_data = result_data[tuple(slices)]
+            elif boundary == "pad":
+                n_windows = (size + window - 1) // window
+                pad_size = n_windows * window - size
+                if pad_size > 0:
+                    pad_width = [(0, 0)] * result_data.ndim
+                    pad_width[axis] = (0, pad_size)
+                    result_data = np.pad(
+                        result_data, pad_width, mode="constant", constant_values=0
+                    )
+            else:
+                raise ValueError(
+                    f"Unknown boundary '{boundary}'. Available: trim, pad"
+                )
+
+            # Reshape to (... n_windows, window, ...)
+            new_shape = list(result_data.shape)
+            new_shape[axis] = n_windows
+            new_shape.insert(axis + 1, window)
+            result_data = result_data.reshape(new_shape)
+
+            # Apply reduction
+            if func == "mean":
+                result_data = result_data.mean(axis=axis + 1)
+            elif func == "sum":
+                result_data = result_data.sum(axis=axis + 1)
+            elif func == "min":
+                result_data = result_data.min(axis=axis + 1)
+            elif func == "max":
+                result_data = result_data.max(axis=axis + 1)
+
+            # Update coordinates - take first of each window
+            orig_coord = result_coords[dim]
+            result_coords[dim] = orig_coord[::window][:n_windows]
+
+        return Array(result_data, result_coords, self.dims, self.name)
