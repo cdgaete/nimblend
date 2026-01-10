@@ -457,3 +457,50 @@ class Array:
         new_coords.update(self.coords)
 
         return Array(new_data, new_coords, new_dims, self.name)
+
+
+    def rename(self, name_map: Dict[str, str]) -> "Array":
+        """
+        Rename dimensions.
+
+        Parameters
+        ----------
+        name_map : dict
+            Mapping from old names to new names.
+
+        Returns
+        -------
+        Array
+            Array with renamed dimensions.
+        """
+        new_dims = [name_map.get(d, d) for d in self.dims]
+        new_coords = {name_map.get(d, d): self.coords[d] for d in self.dims}
+        return Array(self.data.copy(), new_coords, new_dims, self.name)
+
+    def copy(self) -> "Array":
+        """
+        Create a deep copy.
+
+        Returns
+        -------
+        Array
+            Copy with new data and coords arrays.
+        """
+        new_coords = {d: self.coords[d].copy() for d in self.dims}
+        return Array(self.data.copy(), new_coords, list(self.dims), self.name)
+
+    def astype(self, dtype) -> "Array":
+        """
+        Cast data to specified dtype.
+
+        Parameters
+        ----------
+        dtype : numpy dtype
+            Target data type.
+
+        Returns
+        -------
+        Array
+            Array with converted data type.
+        """
+        return Array(self.data.astype(dtype), self.coords, self.dims, self.name)
