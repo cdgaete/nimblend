@@ -197,6 +197,25 @@ class Array:
             return Array(self.data**other, self.coords, self.dims, self.name)
         raise TypeError("Power only supported with scalars")
 
+    # Comparison operators - return boolean Arrays
+    def __eq__(self, other) -> "Array":
+        return self._binary_op(other, lambda a, b: a == b)
+
+    def __ne__(self, other) -> "Array":
+        return self._binary_op(other, lambda a, b: a != b)
+
+    def __lt__(self, other) -> "Array":
+        return self._binary_op(other, lambda a, b: a < b)
+
+    def __le__(self, other) -> "Array":
+        return self._binary_op(other, lambda a, b: a <= b)
+
+    def __gt__(self, other) -> "Array":
+        return self._binary_op(other, lambda a, b: a > b)
+
+    def __ge__(self, other) -> "Array":
+        return self._binary_op(other, lambda a, b: a >= b)
+
     def _reduce(
         self,
         func: Callable,
