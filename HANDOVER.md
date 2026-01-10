@@ -2,98 +2,91 @@
 
 ## Project Overview
 
-Nimblend is a labeled N-dimensional array library for energy modeling with:
+Nimblend is a lightweight labeled N-dimensional array library with:
 
 - Outer-join alignment on binary operations
 - Zero-fill for missing values
-- Pure NumPy backend
+- Pure NumPy backend (no pandas, dask, or other dependencies)
 
-## Implementation
+## API Reference
 
-Location: `src/nimblend/core.py`
+### Properties
+- `data`: Underlying NumPy array
+- `coords`: Dict of dimension name → coordinate array
+- `dims`: List of dimension names
+- `shape`: Tuple of dimension sizes
+- `name`: Optional array name
+- `T`: Transpose (reverse dimensions)
 
-### Array Class
+### Selection
+- `sel(indexers)`: Select by coordinate labels
+- `isel(indexers)`: Select by integer indices
 
-#### Initialization
+### Reductions
+- `sum(dim=None)`: Sum over dimension(s)
+- `mean(dim=None)`: Mean over dimension(s)
+- `min(dim=None)`: Minimum over dimension(s)
+- `max(dim=None)`: Maximum over dimension(s)
+- `std(dim=None)`: Standard deviation
+- `prod(dim=None)`: Product
 
-- `__init__(data, coords, dims=None, name=None)`: Create array with data and coordinate mapping
-- `_validate()`: Verify dimensions match data shape
+### Shape Manipulation
+- `transpose(*dims)`: Reorder dimensions
+- `squeeze(dim=None)`: Remove size-1 dimensions
+- `expand_dims(dim, coord)`: Add new dimension
 
-#### Alignment
+### Utilities
+- `rename(name_map)`: Rename dimensions
+- `copy()`: Deep copy
+- `astype(dtype)`: Convert data type
 
-- `_align_with(other)`: Expand two arrays to common shape using outer join
-- `_fill_expanded(expanded, all_dims, union_coords)`: Place values at correct positions with dimension reordering
+### Binary Operations
+- `+`, `-`, `*`, `/`, `**`: With automatic alignment
+- Scalar operations apply element-wise
 
-#### Operations
-
-- Binary: `+`, `-`, `*`, `/`, `**` with arrays or scalars
-- Reduction: `sum(dim=None)` over specified dimensions
-
-### Verified Behavior
-
-```python
-# Different dimension orders
-arr1 = Array(data1, {'region': r, 'tech': t, 'year': y})
-arr2 = Array(data2, {'tech': t, 'region': r, 'year': y})
-result = arr1 + arr2  # Aligns dimensions automatically
-
-# Partially overlapping coordinates
-regions1 = ['DE', 'FR', 'ES']
-regions2 = ['FR', 'IT', 'PL']
-# Result contains union: ['DE', 'FR', 'ES', 'IT', 'PL'] (order preserved from first array)
-
-# Disjoint coordinates
-years1 = [2010, 2020, 2030]
-years2 = [2040, 2050, 2060]
-# Addition preserves all values
-# Multiplication yields zeros where coordinates don't overlap
-```
-
-## Next Steps
-
-### Compare with xarray
+## Key Behaviors
 
 ```python
-import xarray as xr
-from nimblend import Array
+# Automatic dimension alignment
+arr1 = Array(data1, {'region': ['DE', 'FR'], 'year': [2020, 2030]})
+arr2 = Array(data2, {'year': [2020, 2030], 'region': ['DE', 'FR']})
+result = arr1 + arr2  # Aligns by name, not position
 
-xr_arr = xr.DataArray(data, dims=['region', 'tech'], coords={'region': regions, 'tech': techs})
-nb_arr = Array(data, {'region': regions, 'tech': techs})
+# Outer join with zero-fill
+arr1 = Array(data1, {'x': ['a', 'b']})
+arr2 = Array(data2, {'x': ['b', 'c']})
+result = arr1 + arr2  # coords: ['a', 'b', 'c'], missing filled with 0
 
-# Compare operation results (xarray uses NaN, nimblend uses 0)
+# Coordinate order preserved
+# Result uses first array's order, then appends new from second
 ```
 
-### Features to Implement
-
-- `sel()`: Select by coordinate values
-- `isel()`: Select by integer index
-- `mean()`, `min()`, `max()`: Additional reductions
-- `transpose()`: Reorder dimensions
-- `rename()`: Rename dimensions
-- `expand_dims()`: Add new dimension
-- `squeeze()`: Remove size-1 dimensions
-
-### Edge Cases to Test
-
-- Empty arrays
-- Single-element arrays
-- Single dimension arrays
-- String vs numeric coordinates
-
-## Development Environment
+## Development
 
 ```bash
-cd /home/carlos/projects/nimblend
-python -c "from nimblend import Array"
+# Install dev dependencies
+pip install -e ".[dev]"
+
+# Run linter
+ruff check src/ tests/
+
+# Run tests
+pytest tests/
 ```
 
-Run linter before code changes:
+## Test Coverage
 
-```bash
-ruff check src/nimblend/
-```
+- 95 tests across 7 test files
+- `test_xarray_comparison.py`: Verify correctness vs xarray
+- `test_sel.py`: Label-based selection
+- `test_isel.py`: Index-based selection
+- `test_reductions.py`: sum, mean, min, max, std, prod
+- `test_transpose.py`: Dimension reordering
+- `test_shape.py`: squeeze, expand_dims
+- `test_utils.py`: rename, copy, astype
 
 ## Notes
 
-- Coordinate order is preserved: first array's coords come first, then new coords from second array
+- Coordinate order preserved from first array in operations
 - Missing values fill with 0, not NaN
+- All reductions return scalar when no dims remain
