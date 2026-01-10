@@ -1,0 +1,230 @@
+{
+  "timestamp": "2026-01-10T03:02:22.455184",
+  "results": [
+    {
+      "name": "aligned add (100x100)",
+      "size": "100x100",
+      "elements": 10000,
+      "nimblend_ms": 0.03165006637573242,
+      "xarray_ms": 0.5484980065375566,
+      "speedup": 17.330074446798495,
+      "category": "aligned"
+    },
+    {
+      "name": "aligned add (500x500)",
+      "size": "500x500",
+      "elements": 250000,
+      "nimblend_ms": 0.1670350320637226,
+      "xarray_ms": 0.6775020156055689,
+      "speedup": 4.056047448460434,
+      "category": "aligned"
+    },
+    {
+      "name": "aligned add (1000x1000)",
+      "size": "1000x1000",
+      "elements": 1000000,
+      "nimblend_ms": 0.6051650270819664,
+      "xarray_ms": 1.2681380612775683,
+      "speedup": 2.0955243686046745,
+      "category": "aligned"
+    },
+    {
+      "name": "misaligned outer (100x100 -> 100x150)",
+      "size": "100x100",
+      "elements": 15000,
+      "nimblend_ms": 0.1347350189462304,
+      "xarray_ms": 0.8364120731130242,
+      "speedup": 6.207829854885883,
+      "category": "misaligned_outer"
+    },
+    {
+      "name": "misaligned outer (500x500 -> 500x750)",
+      "size": "500x500",
+      "elements": 375000,
+      "nimblend_ms": 0.7564109982922673,
+      "xarray_ms": 1.8884020391851664,
+      "speedup": 2.496529060852593,
+      "category": "misaligned_outer"
+    },
+    {
+      "name": "misaligned outer (1000x1000 -> 1000x1500)",
+      "size": "1000x1000",
+      "elements": 1500000,
+      "nimblend_ms": 2.326460904441774,
+      "xarray_ms": 9.480470907874405,
+      "speedup": 4.075061347376998,
+      "category": "misaligned_outer"
+    },
+    {
+      "name": "LARGE aligned (1500x1500, 2.2M)",
+      "size": "1500x1500",
+      "elements": 2250000,
+      "nimblend_ms": 1.6587380087003112,
+      "xarray_ms": 2.3780680494382977,
+      "speedup": 1.433661034452096,
+      "category": "large_aligned"
+    },
+    {
+      "name": "LARGE misaligned (1500x1500, 3.4M)",
+      "size": "1500x1500",
+      "elements": 3375000,
+      "nimblend_ms": 5.051154992543161,
+      "xarray_ms": 21.284079062752426,
+      "speedup": 4.213705398898539,
+      "category": "large_misaligned"
+    },
+    {
+      "name": "LARGE aligned (2000x2000, 4.0M)",
+      "size": "2000x2000",
+      "elements": 4000000,
+      "nimblend_ms": 3.250689012929797,
+      "xarray_ms": 3.9830550085753202,
+      "speedup": 1.2252956197078515,
+      "category": "large_aligned"
+    },
+    {
+      "name": "LARGE misaligned (2000x2000, 6.0M)",
+      "size": "2000x2000",
+      "elements": 6000000,
+      "nimblend_ms": 15.672315028496087,
+      "xarray_ms": 37.559392978437245,
+      "speedup": 2.3965440274870127,
+      "category": "large_misaligned"
+    },
+    {
+      "name": "LARGE aligned (3000x3000, 9.0M)",
+      "size": "3000x3000",
+      "elements": 9000000,
+      "nimblend_ms": 9.933248977176845,
+      "xarray_ms": 10.806220932863653,
+      "speedup": 1.0878838291169983,
+      "category": "large_aligned"
+    },
+    {
+      "name": "LARGE misaligned (3000x3000, 13.5M)",
+      "size": "3000x3000",
+      "elements": 13500000,
+      "nimblend_ms": 28.84262497536838,
+      "xarray_ms": 88.39915494900197,
+      "speedup": 3.0648789777107632,
+      "category": "large_misaligned"
+    },
+    {
+      "name": "sum all (100x100)",
+      "size": "100x100",
+      "elements": 10000,
+      "nimblend_ms": 0.015981029719114304,
+      "xarray_ms": 0.16194593627005816,
+      "speedup": 10.13363588682654,
+      "category": "reduction"
+    },
+    {
+      "name": "mean(dim='x') (100x100)",
+      "size": "100x100",
+      "elements": 10000,
+      "nimblend_ms": 0.02507702447474003,
+      "xarray_ms": 0.15304004773497581,
+      "speedup": 6.102799312938118,
+      "category": "reduction"
+    },
+    {
+      "name": "sum all (500x500)",
+      "size": "500x500",
+      "elements": 250000,
+      "nimblend_ms": 0.07390009704977274,
+      "xarray_ms": 0.46404695603996515,
+      "speedup": 6.27938222770429,
+      "category": "reduction"
+    },
+    {
+      "name": "mean(dim='x') (500x500)",
+      "size": "500x500",
+      "elements": 250000,
+      "nimblend_ms": 0.07340905722230673,
+      "xarray_ms": 0.4121899837628007,
+      "speedup": 5.614974491697313,
+      "category": "reduction"
+    },
+    {
+      "name": "sum all (1000x1000)",
+      "size": "1000x1000",
+      "elements": 1000000,
+      "nimblend_ms": 0.2700909972190857,
+      "xarray_ms": 1.8027200130745769,
+      "speedup": 6.674491307136355,
+      "category": "reduction"
+    },
+    {
+      "name": "mean(dim='x') (1000x1000)",
+      "size": "1000x1000",
+      "elements": 1000000,
+      "nimblend_ms": 0.26164494920521975,
+      "xarray_ms": 1.5126309590414166,
+      "speedup": 5.781235080731458,
+      "category": "reduction"
+    },
+    {
+      "name": "sel single (100x100)",
+      "size": "100x100",
+      "elements": 10000,
+      "nimblend_ms": 0.020638923160731792,
+      "xarray_ms": 0.11542800348252058,
+      "speedup": 5.592733815790216,
+      "category": "selection"
+    },
+    {
+      "name": "isel (100x100)",
+      "size": "100x100",
+      "elements": 10000,
+      "nimblend_ms": 0.011170981451869011,
+      "xarray_ms": 0.07070298306643963,
+      "speedup": 6.329164842952125,
+      "category": "selection"
+    },
+    {
+      "name": "sel single (500x500)",
+      "size": "500x500",
+      "elements": 250000,
+      "nimblend_ms": 0.042791012674570084,
+      "xarray_ms": 0.10855600703507662,
+      "speedup": 2.5368880110563374,
+      "category": "selection"
+    },
+    {
+      "name": "isel (500x500)",
+      "size": "500x500",
+      "elements": 250000,
+      "nimblend_ms": 0.010891002602875233,
+      "xarray_ms": 0.06448198109865189,
+      "speedup": 5.920665291332186,
+      "category": "selection"
+    },
+    {
+      "name": "sel single (1000x1000)",
+      "size": "1000x1000",
+      "elements": 1000000,
+      "nimblend_ms": 0.0712249893695116,
+      "xarray_ms": 0.10982796084135771,
+      "speedup": 1.5419863423436382,
+      "category": "selection"
+    },
+    {
+      "name": "isel (1000x1000)",
+      "size": "1000x1000",
+      "elements": 1000000,
+      "nimblend_ms": 0.010949908755719662,
+      "xarray_ms": 0.06335997022688389,
+      "speedup": 5.786346867391743,
+      "category": "selection"
+    }
+  ],
+  "summary": {
+    "total_benchmarks": 24,
+    "nimblend_wins": 24,
+    "xarray_wins": 0,
+    "median_speedup": 4.9032196073443775,
+    "mean_speedup": 4.91572245384386,
+    "min_speedup": 1.0878838291169983,
+    "max_speedup": 17.330074446798495
+  }
+}
