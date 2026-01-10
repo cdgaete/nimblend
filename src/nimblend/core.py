@@ -708,3 +708,32 @@ class Array:
 
         result_data = np.where(cond_data, self.data, other_data)
         return Array(result_data, self.coords, self.dims, self.name)
+
+    def clip(
+        self,
+        min: Optional[Union[int, float]] = None,
+        max: Optional[Union[int, float]] = None,
+    ) -> "Array":
+        """
+        Bound values to a range.
+
+        Parameters
+        ----------
+        min : int or float, optional
+            Minimum value. Values below this are set to min.
+        max : int or float, optional
+            Maximum value. Values above this are set to max.
+
+        Returns
+        -------
+        Array
+            Array with clipped values.
+
+        Examples
+        --------
+        >>> arr.clip(0, 100)    # Clamp to [0, 100]
+        >>> arr.clip(min=0)     # Floor at 0
+        >>> arr.clip(max=100)   # Cap at 100
+        """
+        result_data = np.clip(self.data, min, max)
+        return Array(result_data, self.coords, self.dims, self.name)
