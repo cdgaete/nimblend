@@ -187,10 +187,20 @@ class Array:
                 # Preserve order: self's coords first, then new coords from other
                 self_coords = self.coords[dim]
                 other_coords = other.coords[dim]
-                # Use set of numpy values directly (preserves datetime64 types)
-                self_set = set(self_coords)
-                new_from_other = [c for c in other_coords if c not in self_set]
-                union_coords[dim] = np.concatenate([self_coords, new_from_other])
+                # Use int64 view for datetime64 (faster hashing)
+                if np.issubdtype(self_coords.dtype, np.datetime64):
+                    self_set = set(self_coords.view("int64"))
+                    new_mask = ~np.isin(
+                        other_coords.view("int64"), self_coords.view("int64")
+                    )
+                    new_from_other = other_coords[new_mask]
+                else:
+                    self_set = set(self_coords)
+                    new_from_other = [c for c in other_coords if c not in self_set]
+                if len(new_from_other) > 0:
+                    union_coords[dim] = np.concatenate([self_coords, new_from_other])
+                else:
+                    union_coords[dim] = self_coords.copy()
             elif dim in self.coords:
                 union_coords[dim] = self.coords[dim].copy()
             else:
@@ -237,9 +247,15 @@ class Array:
             if dim in self.dims:
                 union_coord = union_coords[dim]
                 self_coord = self.coords[dim]
-                # Build index mapping
-                coord_to_idx = {v: i for i, v in enumerate(union_coord)}
-                indices = np.array([coord_to_idx[v] for v in self_coord])
+                # Use int64 view for datetime64 (faster hashing)
+                if np.issubdtype(union_coord.dtype, np.datetime64):
+                    u_view = union_coord.view("int64")
+                    s_view = self_coord.view("int64")
+                    coord_to_idx = {v: i for i, v in enumerate(u_view)}
+                    indices = np.array([coord_to_idx[v] for v in s_view])
+                else:
+                    coord_to_idx = {v: i for i, v in enumerate(union_coord)}
+                    indices = np.array([coord_to_idx[v] for v in self_coord])
 
                 # Check if indices are contiguous (can use slice)
                 if len(indices) > 0:
