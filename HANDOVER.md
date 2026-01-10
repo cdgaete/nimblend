@@ -14,16 +14,18 @@ Nimblend is a lightweight labeled N-dimensional array library with:
 |-----------|----------|--------|---------|
 | Creation 100x100 | 0.02ms | 0.60ms | **29x** |
 | Aligned add 100x100 | 0.03ms | 0.56ms | **19x** |
-| Misaligned add 1000x1000 | 2.34ms | 8.71ms | **3.7x** |
+| Aligned add 10000x10000 | 107ms | 107ms | **1.0x** (compute-bound) |
+| Misaligned add 1000x1000 | 2.34ms | 10.15ms | **4.4x** |
+| Misaligned add 20000x20000 | 1.14s | 3.68s | **3.2x** |
 | Reductions 1000x1000 | 0.28ms | 1.75ms | **6.2x** |
 | sel single 1000x1000 | 0.07ms | 0.10ms | **1.5x** |
 
-**Nimblend faster in all 27 benchmarks**
+**Nimblend faster in all 27 benchmarks** (identical results with outer join, fill=0)
 
 ## Recent Changes (This Session)
 
 ### 1. Optimized `sel()` for Large Arrays
-- Batch dtype checking: `_normalize_labels_batch()` checks dtype once, not per label
+- Batch dtype checking: `_normalize_labels_batch()` checks dtype once per coord
 - `searchsorted` for single label lookups on sorted numeric/datetime coords
 - Linear search fallback avoids building full dict for single lookups
 - Result: `sel single (1000x1000)` went from 0.7x → 1.5x vs xarray
@@ -41,21 +43,50 @@ Nimblend is a lightweight labeled N-dimensional array library with:
 - `argmin(dim)`: indices of minimum values
 - `concat(arrays, dim)`: concatenate arrays along dimension (module function)
 
-### 4. Previous Optimizations
-- Datetime64 coordinate support with int64 views for fast hashing
-- Rust `aligned_binop_2d` for fused fill+operation in single pass
+### 4. Large Scale Testing
+Tested up to 20000x20000 arrays (~6.4GB each):
+- Aligned: converges to same speed as xarray (compute-bound by NumPy)
+- Misaligned: consistent **~3.2x speedup** at all sizes
+
+## IN PROGRESS: Parallel Rust Acceleration
+
+Started implementing parallel Rust with rayon but hit compilation errors.
+
+**Files modified:** `rust/src/lib.rs`
+
+**Errors to fix:**
+1. Need to import `PyUntypedArrayMethods` trait for `strides()` method
+2. `SendPtr` wrapper not being used correctly in `elementwise_binop_parallel`
+
+**Fix needed in `rust/src/lib.rs`:**
+```rust
+// Add this import at top:
+use numpy::PyUntypedArrayMethods;
+
+// In elementwise_binop_parallel, change:
+let res_ptr = SendPtr(result.as_raw_array_mut().as_mut_ptr());
+// The closure needs to capture res_ptr, not &res_ptr
+```
+
+**To rebuild after fixing:**
+```bash
+cd /home/carlos/projects/nimblend/rust
+source $HOME/.cargo/env
+source ../.venv/bin/activate
+maturin develop --release
+```
 
 ## Rust Acceleration (`rust/src/lib.rs`)
 
-```bash
-cd rust && maturin develop --release
-```
-
-Functions:
+Current working functions:
 - `fill_expanded_2d_f64` - Fill 2D array at indices
 - `fill_expanded_nd_from_indices` - Fill ND array at indices  
 - `aligned_binop_2d` - Fused fill+op for 2D misaligned (row or col)
-- `scatter_add_2d_rows` - Scatter-add rows (unused currently)
+- `scatter_add_2d_rows` - Scatter-add rows
+
+New parallel functions (need fixes):
+- `aligned_binop_2d_parallel` - Parallel version for large arrays
+- `elementwise_binop_parallel` - Parallel element-wise ops
 
 ## Current API
 
@@ -79,9 +110,9 @@ Functions:
 
 ## Potential Future Optimizations
 
-1. `aligned_binop_nd` - Generalize to N dimensions in Rust
-2. `coord_union_sorted` - Fast union for sorted coords in Rust
-3. Parallel Rust with rayon for arrays >1M elements
+1. **Fix parallel Rust** - Add `use numpy::PyUntypedArrayMethods;` and fix SendPtr usage
+2. `aligned_binop_nd` - Generalize to N dimensions in Rust
+3. `coord_union_sorted` - Fast union for sorted coords in Rust
 4. `groupby` / `rolling` window operations
 
 ## Development Commands
@@ -94,7 +125,8 @@ pytest tests/ --tb=short      # Run tests
 ruff check src/ tests/        # Lint
 python benchmarks/bench_comparison.py  # Full benchmark
 
-# Rebuild Rust
+# Rebuild Rust (after sourcing cargo env)
+source $HOME/.cargo/env
 cd rust && maturin develop --release
 ```
 
