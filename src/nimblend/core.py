@@ -317,9 +317,7 @@ class Array:
         """Product over dimension(s). If None, product of all."""
         return self._reduce(np.prod, dim)
 
-    def sel(
-        self, indexers: Dict[str, Union[Any, List]]
-    ) -> Union["Array", Any]:
+    def sel(self, indexers: Dict[str, Union[Any, List]]) -> Union["Array", Any]:
         """
         Select data by coordinate labels.
 
@@ -385,10 +383,7 @@ class Array:
 
         return Array(result_data, result_coords, result_dims, self.name)
 
-
-    def isel(
-        self, indexers: Dict[str, Union[int, List[int]]]
-    ) -> Union["Array", Any]:
+    def isel(self, indexers: Dict[str, Union[int, List[int]]]) -> Union["Array", Any]:
         """
         Select data by integer index positions.
 
@@ -450,7 +445,6 @@ class Array:
 
         return Array(result_data, result_coords, result_dims, self.name)
 
-
     def transpose(self, *dims: str) -> "Array":
         """
         Reorder dimensions.
@@ -495,7 +489,6 @@ class Array:
     def T(self) -> "Array":
         """Transpose: reverse dimension order."""
         return self.transpose()
-
 
     def squeeze(self, dim: Optional[str] = None) -> "Array":
         """
@@ -564,8 +557,7 @@ class Array:
         """
         if dim in self.dims:
             raise ValueError(
-                f"Dimension '{dim}' already exists. "
-                f"Current dimensions: {self.dims}"
+                f"Dimension '{dim}' already exists. " f"Current dimensions: {self.dims}"
             )
 
         if coord is None:
@@ -577,7 +569,6 @@ class Array:
         new_coords.update(self.coords)
 
         return Array(new_data, new_coords, new_dims, self.name)
-
 
     def rename(self, name_map: Dict[str, str]) -> "Array":
         """
@@ -624,3 +615,57 @@ class Array:
             Array with converted data type.
         """
         return Array(self.data.astype(dtype), self.coords, self.dims, self.name)
+
+    def __getitem__(self, key) -> Union["Array", np.ndarray, Any]:
+        """
+        Index into the array.
+
+        Supports three forms of indexing:
+
+        1. Dict-based selection (alias for sel):
+           arr[{'x': 'a'}] is equivalent to arr.sel({'x': 'a'})
+
+        2. Integer/slice indexing on first dimension:
+           arr[0] selects first element along first dim
+           arr[0:2] slices first dimension
+
+        3. Dimension name (returns coordinate array):
+           arr['x'] returns the coordinate values for dimension 'x'
+
+        Parameters
+        ----------
+        key : dict, int, slice, or str
+            Indexer for the array.
+
+        Returns
+        -------
+        Array, np.ndarray, or scalar
+            Selected data. Dict and int/slice return Array or scalar.
+            String returns coordinate array.
+        """
+        # Dict-based selection: delegate to sel
+        if isinstance(key, dict):
+            return self.sel(key)
+
+        # String: return coordinate array for that dimension
+        if isinstance(key, str):
+            if key not in self.dims:
+                raise KeyError(
+                    f"Dimension '{key}' not found. "
+                    f"Available dimensions: {self.dims}"
+                )
+            return self.coords[key]
+
+        # Integer or slice: index first dimension
+        if isinstance(key, (int, slice)):
+            first_dim = self.dims[0]
+
+            if isinstance(key, int):
+                # Use isel for integer indexing
+                return self.isel({first_dim: key})
+            else:
+                # Slice: keep dimension
+                indices = range(*key.indices(len(self.coords[first_dim])))
+                return self.isel({first_dim: list(indices)})
+
+        raise TypeError(f"Invalid index type: {type(key).__name__}")
