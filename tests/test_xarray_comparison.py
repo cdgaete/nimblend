@@ -196,6 +196,30 @@ class TestPartiallyOverlappingCoordinates:
         assert set(nb_result.coords["y"]) == set(xr_result.coords["y"].values)
         assert_array_equal(nb_result.data, xr_result.values)
 
+    def test_partial_overlap_columns_only(self):
+        """Arrays sharing some but not all coordinate values in second dim."""
+        # This tests the column-misaligned fast path in _fast_aligned_binop_2d
+        data1 = np.array([[1.0, 2.0], [3.0, 4.0]])
+        data2 = np.array([[10.0, 20.0], [30.0, 40.0]])
+
+        xr1 = xr.DataArray(
+            data1, dims=["x", "y"], coords={"x": ["a", "b"], "y": [0, 1]}
+        )
+        xr2 = xr.DataArray(
+            data2, dims=["x", "y"], coords={"x": ["a", "b"], "y": [1, 2]}
+        )
+
+        nb1 = Array(data1, {"x": ["a", "b"], "y": [0, 1]})
+        nb2 = Array(data2, {"x": ["a", "b"], "y": [1, 2]})
+
+        xr1_aligned, xr2_aligned = align_xarray_outer(xr1, xr2)
+        xr_result = xr1_aligned + xr2_aligned
+        nb_result = nb1 + nb2
+
+        assert set(nb_result.coords["x"]) == set(xr_result.coords["x"].values)
+        assert set(nb_result.coords["y"]) == set(xr_result.coords["y"].values)
+        assert_array_equal(nb_result.data, xr_result.values)
+
     def test_partial_overlap_both_dims(self):
         """Arrays sharing some coordinates in both dimensions."""
         data1 = np.array([[1, 2], [3, 4]])

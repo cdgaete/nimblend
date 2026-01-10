@@ -485,8 +485,50 @@ class Array:
 
         else:
             # Dim 1 (cols) misaligned - transpose, compute, transpose back
-            # For now, fall back to generic path
-            return None
+            self_c = self.coords[dim1]
+            other_c = other.coords[dim1]
+
+            # Compute union coords
+            if np.issubdtype(self_c.dtype, np.datetime64):
+                self_set = set(self_c.view("int64"))
+                new_mask = ~np.isin(other_c.view("int64"), self_c.view("int64"))
+            else:
+                self_set = set(self_c)
+                new_mask = np.array([c not in self_set for c in other_c])
+
+            new_from_other = other_c[new_mask]
+            if len(new_from_other) > 0:
+                union_c1 = np.concatenate([self_c, new_from_other])
+            else:
+                union_c1 = self_c.copy()
+
+            # Build index mappings
+            if np.issubdtype(union_c1.dtype, np.datetime64):
+                u_view = union_c1.view("int64")
+                c2i = {v: i for i, v in enumerate(u_view)}
+                idx1 = np.array(
+                    [c2i[v] for v in self_c.view("int64")], dtype=np.int64
+                )
+                idx2 = np.array(
+                    [c2i[v] for v in other_c.view("int64")], dtype=np.int64
+                )
+            else:
+                c2i = {v: i for i, v in enumerate(union_c1)}
+                idx1 = np.array([c2i[v] for v in self_c], dtype=np.int64)
+                idx2 = np.array([c2i[v] for v in other_c], dtype=np.int64)
+
+            # Transpose to make cols become rows, apply binop, transpose back
+            # result.T shape: (len_union_c1, nrows)
+            result_t = np.zeros(
+                (len(union_c1), self.data.shape[0]), dtype=np.float64
+            )
+            aligned_binop_2d(
+                result_t, self.data.T, idx1, other.data.T, idx2, op_name
+            )
+            result = result_t.T  # Back to (nrows, len_union_c1)
+
+            union_coords = {dim0: self.coords[dim0].copy(), dim1: union_c1}
+            return Array(result, union_coords, self.dims, self.name)
 
     def __add__(self, other):
         if isinstance(other, Array):
