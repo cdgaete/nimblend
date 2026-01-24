@@ -476,7 +476,8 @@ class Array:
             result_data = op(self_exp, other_exp)
             return Array(result_data, union_coords, all_dims, self.name)
 
-        raise TypeError(f"Unsupported type: {type(other)}")
+        # Return NotImplemented to allow other type's __rmul__ etc to be tried
+        return NotImplemented
 
     def _fast_aligned_binop_2d(
         self, other: "Array", op_name: str

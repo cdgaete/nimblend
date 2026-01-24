@@ -87,3 +87,4 @@ tests/              # 19 test files, 220 tests
 4. **Scalars on full reduction**: `arr.sum()` returns Python scalar
 5. **Minimal dependencies**: Only numpy required
 6. **Parallel threshold**: Arrays >1M elements use parallel Rust automatically
+7. **NotImplemented for unknown types**: Binary ops return `NotImplemented` for unknown types, allowing Python to try the other operand's `__rmul__` etc.
