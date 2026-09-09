@@ -34,6 +34,7 @@ classifiers = [
 
 [project.urls]
 Homepage = "https://github.com/cdgaete/nimblend"
+Documentation = "https://cdgaete.github.io/nimopt/nimblend/"
 Repository = "https://github.com/cdgaete/nimblend"
 Issues = "https://github.com/cdgaete/nimblend/issues"
 
