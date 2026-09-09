@@ -2,6 +2,8 @@
 
 Labelled sparse N-dimensional arrays for Python.
 
+The documentation site is at <https://cdgaete.github.io/nimopt/nimblend/>.
+
 `nimblend` stores an N-dimensional array as the entries it carries rather than as a grid, and names every position by a label rather than by an offset. Two arrays combine by aligning their labels, never by matching their shapes, so an operand's dimensions may be reordered, may nest inside the other's, or may overlap it partially, and the result carries a frame determined by the dimension names alone. The package declares one dependency, `numpy`, and its vocabulary is dimensions, labels, entries and alignment.
 
 The distinguishing property is that absence is a first-class declaration. An array states whether a coordinate it does not carry contributes nothing (`"empty"`) or was not modelled (`"unknown"`), and every operator and reduction follows from that declaration rather than from an implementation's convenience. A stored `0.0` remains distinct from an absent coordinate under both.
