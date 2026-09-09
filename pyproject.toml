@@ -1,0 +1,62 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nimblend"
+version = "0.1.0"
+description = "Labeled sparse N-dimensional arrays"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Carlos Gaete-Morales", email = "cdgaete@gmail.com" }]
+requires-python = ">=3.13,<3.15"
+dependencies = ["numpy>=2.5.2"]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "hypothesis>=6",
+    "ruff>=0.16",
+    "scipy>=1.16",
+    "pre-commit>=4.6.2",
+    "coverage>=7.16",
+    "vulture>=2.14",
+    "ty>=0.0.78",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/nimblend"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py313"
+src = [".", "src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "W", "S", "SIM114", "C416", "PIE790", "B023", "ANN"]
+ignore = ["ANN401"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "ANN"]
+"benchmarks/**" = ["S101", "ANN"]
+
+[tool.ty.src]
+include = ["src"]
+
+[tool.coverage.run]
+branch = true
+source = ["src/nimblend"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError"]
+
+[tool.vulture]
+min_confidence = 60
+paths = ["src", "tests", "benchmarks"]
+sort_by_size = true
+ignore_names = ["args", "kwargs"]
