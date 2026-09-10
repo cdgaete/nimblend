@@ -17,7 +17,7 @@ pip install .            # the package
 pip install -e ".[dev]"  # editable, with the test and lint tooling
 ```
 
-Python 3.13 or 3.14, and `numpy >= 2.5.2`. A built wheel is in `dist/`.
+Python 3.12, 3.13 or 3.14, and `numpy >= 2.3`. A built wheel is in `dist/`.
 
 ## Quick start
 
