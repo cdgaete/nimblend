@@ -13,6 +13,10 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ## Unreleased
 
+### Changed
+
+- The README opens on the PyPI install and is written in technical English.
+
 ### Fixed
 
 - `SparseArray.shift` and `DenseArray.shift` raise `ValueError` for a `mode`

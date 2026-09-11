@@ -1,23 +1,26 @@
 # nimblend
 
-Labelled sparse N-dimensional arrays for Python.
+Labeled sparse N-dimensional arrays for Python.
 
 The documentation site is at <https://cdgaete.github.io/nimopt/nimblend/>.
 
-`nimblend` stores an N-dimensional array as the entries it carries rather than as a grid, and names every position by a label rather than by an offset. Two arrays combine by aligning their labels, never by matching their shapes, so an operand's dimensions may be reordered, may nest inside the other's, or may overlap it partially, and the result carries a frame determined by the dimension names alone. The package declares one dependency, `numpy`, and its vocabulary is dimensions, labels, entries and alignment.
+`nimblend` stores an N-dimensional array as its entries, not as a grid, and identifies every position by a label, not by an offset. Two arrays combine by aligning their labels, not by matching their shapes. The dimensions of an operand may be in another order, may be a subset of the other operand's dimensions, or may overlap them partially. The frame of the result follows from the dimension names alone. The package has one dependency, `numpy`, and its vocabulary is dimensions, labels, entries and alignment.
 
-The distinguishing property is that absence is a first-class declaration. An array states whether a coordinate it does not carry contributes nothing (`"empty"`) or was not modelled (`"unknown"`), and every operator and reduction follows from that declaration rather than from an implementation's convenience. A stored `0.0` remains distinct from an absent coordinate under both.
+Every array declares what an absent coordinate means. Under `"empty"`, an absent coordinate contributes nothing. Under `"unknown"`, it was not modeled. Every operator and reduction follows the declaration. A stored `0.0` is distinct from an absent coordinate under both.
 
 ## Installation
 
-From a checkout:
+```bash
+pip install nimblend
+```
+
+For work on the package, from a checkout:
 
 ```bash
-pip install .            # the package
 pip install -e ".[dev]"  # editable, with the test and lint tooling
 ```
 
-Python 3.12, 3.13 or 3.14, and `numpy >= 2.3`. A built wheel is in `dist/`.
+The package requires Python 3.12, 3.13 or 3.14, and `numpy >= 2.3`.
 
 ## Quick start
 
@@ -39,7 +42,7 @@ demand
 # SparseArray(('year', 'region'), shape=(3, 2), nnz=3, absence='empty')
 ```
 
-Three of the six coordinates the frame spans carry an entry. Densifying places the additive identity at the rest, because that is what `absence="empty"` declares them to contribute:
+Three of the six coordinates of the frame have an entry. `to_dense()` writes the additive identity at the other three: under `absence="empty"`, an absent coordinate contributes nothing.
 
 ```python
 demand.to_dense()
@@ -48,7 +51,7 @@ demand.to_dense()
 #        [0., 0.]])
 ```
 
-An array over one dimension multiplies an array over two by aligning on the dimension they share. The narrower operand supplies a factor at every coordinate of the wider frame, and the result is over the wider frame:
+The product of an array over one dimension and an array over two aligns on the shared dimension. The narrower operand provides a factor at every coordinate of the wider frame, and the result is over the wider frame:
 
 ```python
 price = nb.from_long(
@@ -64,24 +67,24 @@ cost.sum("region")  # SparseArray(('year',), shape=(3,), nnz=2, absence='empty')
 cost.sum()  # 43.0
 ```
 
-The reduction over `region` carries two entries, not three: 2050 holds no entry to sum, so the reduced array holds no entry there either.
+The sum over `region` has two entries, not three. `cost` has no entry at 2050, and the sum has no entry there either.
 
-## Why there are six concepts
+## Six concepts
 
-A labelled array could have been one class. It is six, and the reason is that each one answers a question the one before it raises. Read in order, the table derives the library: every row states a question, and the subsection under it shows what goes wrong when the answer is missing.
+The package defines six concepts. Each concept addresses a question that the previous one raises. Each subsection below shows the error that occurs without the concept.
 
-| | Concept | The question it answers |
+| | Concept | Question |
 |---|---|---|
-| 1 | a coordinate | Where does the label `"FR"` sit, and what sits at position 3? |
-| 2 | `StoredCoord`, `ProductCoord`, `SubsetCoord` | Must a dimension's names be stored in order to be answered? |
-| 3 | `SparseArray`, `DenseArray`, `Array` | Hold every cell of the grid, or only the entries that exist? |
-| 4 | `absence` | Does a coordinate holding nothing mean zero, or mean unknown? |
+| 1 | a coordinate | Which position has the label `"FR"`, and which label is at position 3? |
+| 2 | `StoredCoord`, `ProductCoord`, `SubsetCoord` | Does a dimension require its labels stored in an array? |
+| 3 | `SparseArray`, `DenseArray`, `Array` | Store every cell of the grid, or only the entries that exist? |
+| 4 | `absence` | Does an absent coordinate mean zero, or unknown? |
 | 5 | `Domain` | Which coordinates exist over several dimensions at once? |
-| 6 | `EntryBuffer` | How is one result assembled out of many separate blocks? |
+| 6 | `EntryBuffer` | How is one result assembled from many separate blocks? |
 
 ### 1. A label is not a position
 
-numpy aligns by position. Two arrays holding the same data under different orderings are combined cell against cell, and the answer is wrong without saying so:
+numpy aligns by position. For two arrays with the same data in different orders, numpy combines cell with cell and returns a wrong result with no error:
 
 ```python
 import numpy as np
@@ -101,9 +104,9 @@ a.to_dense() + c.to_dense()  # numpy: adds DE to FR
 #        [7., 7.]])
 ```
 
-`c` holds exactly the data `a` holds — the same value against the same pair of labels — and differs only in listing its regions the other way round. Adding the two by label therefore has to give `a` doubled, `[[2, 4], [6, 8]]`. Adding the grids gives something else, because numpy pairs cell with cell and cannot see that column 0 means `"DE"` on one side and `"FR"` on the other.
+`c` has the same value as `a` at each pair of labels. Only the order of its regions differs. The sum by label is therefore `a` doubled, `[[2, 4], [6, 8]]`. The sum of the grids differs: numpy pairs cell with cell, and column 0 is `"DE"` in one grid and `"FR"` in the other.
 
-An operation that aligns by label cannot make that mistake. A coordinate is what makes it possible: it answers, for one dimension, which position a label occupies and which label sits at a position. Given that, two arrays whose dimensions are merely in a different order combine without the caller doing anything:
+An operation that aligns by label does not produce that error. A coordinate provides the alignment: for one dimension, it returns the position of a label and the label at a position. Two arrays whose dimensions are in another order then combine with no action from the caller:
 
 ```python
 b = nb.from_dense(
@@ -117,7 +120,7 @@ b = nb.from_dense(
 #        [22., 44.]])
 ```
 
-And two arrays whose labels genuinely disagree are refused rather than guessed at:
+For two arrays whose labels differ, the operation raises `ValueError`:
 
 ```python
 a + c
@@ -125,11 +128,11 @@ a + c
 # conform one to the other first
 ```
 
-**What it buys.** The frame of a result follows from the dimension names alone, so an operand may be transposed, narrower than the other, or only partly overlapping it, and nothing is lined up by hand. Where the labels cannot be reconciled the operation stops instead of returning a plausible number.
+**Effect.** The frame of a result follows from the dimension names alone. An operand may be transposed, narrower than the other, or partially overlapping it, and the caller aligns nothing by hand. Where the labels differ, the operation raises and returns no value.
 
-### 2. A dimension's names need not be stored
+### 2. A dimension does not require stored labels
 
-A coordinate has to answer the label question; it does not have to hold an array of labels to do so. Where positions run `0, 1, 2, …` over a product of axis sizes, the answer is arithmetic, and storing it would cost a great deal for nothing:
+A coordinate returns the position of a label and the label at a position. It does not require an array of labels for that. Where the positions run `0, 1, 2, …` over a product of axis sizes, the position is computed. An array of labels then adds memory and no information:
 
 ```python
 stored = nb.StoredCoord(np.arange(10_000_000))
@@ -138,62 +141,62 @@ generated = nb.ProductCoord((10_000_000,))
 stored.labels.nbytes  # 80000000
 len(stored), len(generated)  # (10000000, 10000000)
 stored.to_index(np.array([3])), generated.to_index(np.array([3])).ravel()
-# (array([3]), array([3]))
+# (array([3]), array([3], dtype=int32))
 ```
 
-The two answer alike; one costs 80 MB and the other a tuple and an integer. That is why there are three coordinates rather than one, and why they are interchangeable: `StoredCoord` holds arbitrary labels, `ProductCoord` computes the positions of a full product, and `SubsetCoord` computes the positions of a subset of one, numbering its members in code order.
+The two coordinates return the same label. One uses 80 MB, and the other a tuple and an integer. The package therefore has three interchangeable coordinates. `StoredCoord` stores arbitrary labels. `ProductCoord` computes the positions of a full product. `SubsetCoord` computes the positions of a subset of a product, and numbers its members in code order.
 
-| Coordinate | Holds | Suited to |
+| Coordinate | Stores | Use |
 |---|---|---|
-| `StoredCoord(labels)` | An array of labels | A dimension named by arbitrary labels |
-| `ProductCoord(sizes, start=0)` | Axis sizes only | A dimension spanning a full product |
-| `SubsetCoord(codes, sizes, start=0)` | The subset's ravelled codes | A dimension spanning part of a product |
+| `StoredCoord(labels)` | An array of labels | A dimension with arbitrary labels |
+| `ProductCoord(sizes, start=0)` | Axis sizes only | A dimension over a full product |
+| `SubsetCoord(codes, sizes, start=0)` | The raveled codes of the subset | A dimension over part of a product |
 
-`StoredCoord` builds the sorted permutation a lookup needs on the first lookup rather than at construction, so even a stored coordinate carried only to state a dimension's extent never pays for one.
+`StoredCoord` builds the sorted permutation for lookups at the first lookup, not at construction. A stored coordinate that only defines the extent of a dimension never builds it.
 
-**What it buys.** A dimension spanning millions of positions costs nothing to carry, so a subset of a product is a thing in its own right rather than a full grid with holes in it.
+**Effect.** A dimension over millions of positions uses constant memory. A subset of a product is a coordinate of its own, not a full grid with missing cells.
 
 ### 3. Entries, or cells
 
-Naming positions says nothing about how many of them carry a value. Both answers are reasonable and neither is right everywhere, so both exist behind one contract.
+Labels do not determine how many positions have a value. Each storage form suits a different density, and both implement one contract.
 
-`SparseArray` holds an index matrix of one row per dimension and one column per entry, beside a value buffer, and holds nothing for a coordinate it does not carry. Entries are kept in canonical order — sorted by their C-order ravel key, with no key repeated — which is what makes alignment a merge over sorted keys rather than a hash join.
+`SparseArray` stores an index matrix, with one row per dimension and one column per entry, and a value buffer. It stores nothing for an absent coordinate. The entries are in canonical order: sorted by their C-order ravel key, with no key repeated. Canonical order makes alignment a merge over sorted keys, not a hash join.
 
-`DenseArray` holds an ndarray over the same labelled dimensions, and is the faster representation once the grid is well populated. The [Performance](#performance) section measures where one overtakes the other: the crossover in time sits near one per cent density, and memory favours the sparse form well before that.
+`DenseArray` stores an ndarray over the same labeled dimensions. It is faster where most cells have a value. The [Performance](#performance) section measures the crossover: near 1% density for time. The sparse form uses less memory at every density the section measures.
 
-`Array` is the contract both satisfy, so a consumer writes one piece of code and chooses the representation on density rather than on capability:
+Both implement the `Array` protocol. A consumer writes one piece of code and chooses the storage form by density:
 
 ```python
 isinstance(a, nb.Array)  # True
 ```
 
-**What it buys.** Density is a storage decision rather than an API decision, and changing it changes no calling code.
+**Effect.** The storage form is a choice of density, not of interface. A change of storage form changes no calling code.
 
 ### 4. Absence has two meanings
 
-An array holding entries rather than cells must say what a missing entry means — and there are two answers, which want opposite arithmetic. A coordinate that contributes nothing is the additive identity, so a sum over it is a union of what either operand carries. A coordinate that was never modelled has no value at all, so a sum over it is an intersection: nothing is known where either operand is silent.
+An array of entries requires a meaning for an absent entry. The two meanings require opposite arithmetic. A coordinate that contributes nothing is the additive identity. A sum is then the union of the entries of the two operands. A coordinate that was not modeled has no value. A sum is then the intersection: the result has no entry where either operand has none.
 
-Nothing in the data distinguishes the two, so the array declares it:
+The data does not distinguish the two meanings. The array declares one:
 
 ```python
 coords = {"region": nb.StoredCoord(np.array(["DE", "FR"]))}
 de = nb.from_long(("region",), coords, {"region": np.array(["DE"])}, np.array([1.0]))
 fr = nb.from_long(("region",), coords, {"region": np.array(["FR"])}, np.array([2.0]))
 
-(de + fr).nnz  # 2 — absence is the identity, so the sum is a union
+(de + fr).nnz  # 2: absence is the identity, and the sum is a union
 
 unknown = de.as_unknown() + fr.as_unknown()
-unknown.nnz  # 0 — nothing is known at either coordinate
+unknown.nnz  # 0: neither coordinate has a value in both operands
 ```
 
 | | `"empty"` | `"unknown"` |
 |---|---|---|
-| An absent coordinate means | it contributes nothing | it was not modelled |
+| An absent coordinate | contributes nothing | was not modeled |
 | Addition aligns by | union | intersection |
-| Reduction | uses the entries held | must state `skip=True` or `fill=<value>` |
-| `to_dense()` | places `0.0` | must state `fill=<value>` where coverage is partial |
+| Reduction | uses the present entries | requires `skip=True` or `fill=<value>` |
+| `to_dense()` | writes `0.0` | requires `fill=<value>` where a coordinate is absent |
 
-Under `"unknown"` the operations that would have to invent a value say so instead:
+Under `"unknown"`, an operation that requires a value at an absent coordinate raises `ValueError`:
 
 ```python
 de.as_unknown().sum()
@@ -202,15 +205,15 @@ de.as_unknown().sum()
 # coordinates
 ```
 
-A stored `0.0` is distinct from an absent coordinate under both declarations: it is a coordinate that is present and worth nothing.
+A stored `0.0` is distinct from an absent coordinate under both declarations. It is a present coordinate with the value zero.
 
-**What it buys.** A missing measurement is never quietly counted as a zero, and the caller states which of the two meanings applies once, on the array, rather than at every operation that reads it.
+**Effect.** A missing measurement is never counted as zero. The caller declares the meaning once, on the array, not at each operation.
 
 ### 5. A question about several dimensions at once
 
-A coordinate answers for one dimension. Many of the questions that arise are about a tuple of them: which coordinates does this array actually carry, which do two arrays share, which did an operation drop, and what number does each of them get? None of those can be put to a coordinate, because a member is a combination across dimensions rather than a position along one.
+A coordinate covers one dimension. Other questions concern a tuple of dimensions: the coordinates of an array, the coordinates two arrays share, and the coordinates an operation removes. A numbering of those coordinates is a further question. A coordinate does not return these. A member is a combination across dimensions, not a position along one.
 
-A `Domain` is that answer — a sorted, unique set of multi-indices over named dimensions, held as ravelled codes:
+A `Domain` is a sorted set of unique multi-indices over named dimensions, stored as raveled codes:
 
 ```python
 years = nb.StoredCoord(np.array([2030, 2040, 2050]))
@@ -236,38 +239,38 @@ shared.labels()  # {'year': array([2040]), 'region': array(['DE'], dtype='<U2')}
 p.restrict(shared).nnz  # 1
 ```
 
-Because a domain is a set with an order, it also states a numbering, which is what lets its members become a dimension of something else. `as_coord(start)` reads it back as a coordinate, and `identity(into, coord)` pairs each member with its own position along a new dimension — the two agree, so a member numbered one way sits where the other puts it.
+A domain is an ordered set, and it defines a numbering of its members. The members can therefore form a dimension of another array. `as_coord(start)` returns the domain as a coordinate. `identity(into, coord)` pairs each member with its position along a new dimension. The two numberings are equal: a member has the same position under both.
 
 ```python
 shared.as_coord(start=5)  # SubsetCoord(1 of (3, 2), start=5)
 ```
 
-**What it buys.** Set arithmetic over coordinates — intersection, union, difference — plus a numbering, so a consumer can ask which members survive an operation and give the survivors positions along a dimension of their own.
+**Effect.** A domain supports intersection, union and difference, and numbers its members. A consumer finds which members remain after an operation, and gives them positions along a new dimension.
 
-### 6. One result out of many blocks
+### 6. One result from many blocks
 
-A result assembled from several blocks would ordinarily exist twice: once as the blocks, and once as the concatenation of them. `EntryBuffer` is one preallocated index and value buffer that hands out successive slices, and the kernel operations write directly into a slice, so a block never exists as a separate object.
+A result assembled from several blocks normally exists twice in memory: once as the blocks, and once as their concatenation. `EntryBuffer` is one preallocated index and value buffer that returns successive slices. The kernel functions write into a slice. A block therefore never exists as a separate object.
 
-The [Performance](#performance) section measures it: assembling sixteen blocks peaks at 1.04× the final size, and the excess is one transient sort-merge rather than a second copy of the result.
+The [Performance](#performance) section measures the effect. Assembling sixteen blocks peaks at 1.04 times the final size. The excess is the working set of one sort-merge, not a second copy of the result.
 
-**What it buys.** The peak memory of building a large result is the result plus one block, rather than twice the result.
+**Effect.** The peak memory of a large result is the result plus one block, not twice the result.
 
 ---
 
-Those six are the whole library. Everything below states what they do in detail: how a result's frame is decided, which operations an array answers, how a block is grouped and exported, and what the measurements show.
+These six concepts are the whole package. The sections below describe them in detail: the frame of a result, the operations of an array, grouping and export, and the measurements.
 
 ## Alignment
 
-The frame a binary result carries is read from the two operands' dimension names alone, by one rule that every operator obeys.
+The frame of a binary result follows from the dimension names of the two operands. Every operator applies one rule:
 
 | Operands | Result frame |
 |---|---|
 | Equal | The shared order |
-| One nesting inside the other | The wider |
-| Overlapping | The left operand's dimensions, then those only the right carries |
-| Sharing no dimension | Refused |
+| One a subset of the other | The wider |
+| Overlapping | The dimensions of the left operand, then those only the right operand has |
+| Sharing no dimension | Raises `ValueError` |
 
-`combined_dims` states that rule without an array to read it from, so a caller may know the answer before materialising either operand:
+`combined_dims` applies the rule to two tuples of dimension names. A caller obtains the frame before building either operand:
 
 ```python
 nb.combined_dims(("P", "Q"), ("Q", "R"))  # ('P', 'Q', 'R')
@@ -276,49 +279,49 @@ nb.combined_dims(("P",), ("Q",))
 # share a dimension
 ```
 
-Frames sharing no dimension have nothing to align on, and their combination would be an outer product no caller asked for, so it is refused rather than performed.
+Two frames that share no dimension have no dimension to align on. Their combination is an outer product, and the operators raise `ValueError` for it. `expand` builds an outer product where the caller requires one.
 
-Alignment is by label throughout, and operands whose shared dimension carries different labels are refused rather than aligned by position, as [step 1](#1-a-label-is-not-a-position) shows. `conform` is what reconciles them: it reads an array at exactly the labels given, in the order given.
+Alignment is by label. Operands whose shared dimension has different labels raise `ValueError`, as [section 1](#1-a-label-is-not-a-position) shows. They are not aligned by position. `conform` reconciles them: it reads an array at exactly the labels given, in the order given.
 
-A quotient refuses an absent denominator, which is a coverage question rather than an arithmetic one: a numerator reaching a coordinate the denominator does not carry has no quotient there that is either zero or one.
+A quotient raises `ValueError` where the denominator is absent and the numerator has a value. The quotient at that coordinate is undefined: it is neither zero nor one.
 
 ```python
 # ValueError: the denominator is absent at 1 coordinate(s) where the numerator
 # has a value; restrict the numerator to the domain of the denominator
 ```
 
-A stored zero, by contrast, is a value the array carries, so dividing by one answers what the arithmetic answers — infinity, or NaN where the numerator is zero too.
+A stored zero is a value. Division by a stored zero follows floating-point arithmetic: infinity, or NaN where the numerator is also zero.
 
-Mixing the two implementations is allowed, and every mixed operation answers a `SparseArray`: the dense operand contributes its present coordinates as entries, and the arithmetic is then the sparse arithmetic above. A product intersects presence, so it carries at most the entries the sparse operand holds.
+An operation on a `SparseArray` and a `DenseArray` returns a `SparseArray`. The present coordinates of the dense operand become entries, and the sparse arithmetic above applies. A product intersects presence: it has at most the entries of the sparse operand.
 
 ## Operations
 
-Every operation below is on the `Array` contract and is answered by both implementations.
+Every operation below is part of the `Array` protocol, and both implementations support it.
 
-**Arithmetic** — `+`, `-`, `*`, `/`, `**` (by a number), unary `-`, and the reflected forms. An exponent must be a number: raising an array by an array is not an operation the contract offers.
+**Arithmetic.** `+`, `-`, `*`, `/`, `**` by a number, unary `-`, and the reflected forms. The exponent of `**` is a number. An array as the exponent raises `TypeError`.
 
-**Reductions** — `sum`, `mean`, `min`, `max`, each over one named dimension or over the whole array, and each taking the `skip=` / `fill=` policy an `"unknown"` array requires. Reducing every dimension in turn ends at an array over none, which carries the single entry holding the total.
+**Reductions.** `sum`, `mean`, `min` and `max`, over one named dimension or over the whole array. Each takes the `skip=` or `fill=` policy that an `"unknown"` array requires. Reducing every dimension in turn returns an array over no dimension, with one entry: the total.
 
 **Selection and reshaping**
 
-| Method | Answers |
+| Method | Returns |
 |---|---|
-| `sel({dim: label})` | Entries at the given labels, dropping each dimension named |
-| `restrict(domain)` | The entries whose coordinate over the domain's dimensions it carries |
-| `expand(dims, coords)` | Every entry replicated across the full extent of the named dimensions |
-| `conform(dims, labels)` | The array read at exactly `labels`, laid out over `dims` |
-| `transpose(*dims)` | The dimensions in the order given, or reversed when none are named |
-| `rename({old: new})` | The array with dimensions renamed |
-| `shift({dim: n})` | Entries moved along a dimension, those leaving the frame dropped |
-| `roll({dim: n})` | Entries moved along a dimension, wrapping at the ends |
+| `sel({dim: label})` | The entries at the given labels, without the selected dimensions |
+| `restrict(domain)` | The entries whose coordinate over the dimensions of the domain is a member of the domain |
+| `expand(dims, coords)` | Every entry replicated over the full extent of the given dimensions |
+| `conform(dims, labels)` | The array read at exactly `labels`, over `dims` |
+| `transpose(*dims)` | The dimensions in the order given, or reversed when none are given |
+| `rename({old: new})` | The array with its dimensions renamed |
+| `shift({dim: n})` | The entries moved along a dimension; an entry moved outside the frame is removed |
+| `roll({dim: n})` | The entries moved along a dimension, with wrapping at the ends |
 
-`expand` appends its dimensions, which keeps the result canonical; a different order is reached with `transpose`. Adding a dimension of size `k` multiplies the entry count by `k`, so replication is stated by the caller rather than implied by an operator. `conform` names each label once, since a repeat would ask one position to occupy two.
+`expand` appends its dimensions, and the result stays canonical. `transpose` gives another order. A dimension of size `k` multiplies the number of entries by `k`. The caller requests replication explicitly, and no operator performs it implicitly. `conform` takes each label once, and a repeated label raises `ValueError`.
 
-**Reading the entries out** — `coordinates(dims)` and `values()` answer the entries as copies without handing out the buffers the array owns; `domain(dims)` answers the distinct coordinates covered; `to_dense(fill)` answers a grid; `nnz`, `dims`, `shape` and `coords` answer the frame.
+**Reading the entries.** `coordinates(dims)` and `values()` return copies of the entries, not the buffers of the array. `domain(dims)` returns the distinct coordinates. `to_dense(fill)` returns a grid. `nnz`, `dims`, `shape` and `coords` describe the frame.
 
 ## Grouping and matrix export
 
-`group` collapses a tuple of dimensions into one dimension numbered by a domain. A member's position in the domain, plus `offset`, is its index along the new dimension.
+`group` replaces a tuple of dimensions with one dimension, numbered by a domain. The index of a member along the new dimension is its position in the domain plus `offset`.
 
 ```python
 grouped = demand.group(("year",), into="g")
@@ -326,18 +329,20 @@ grouped  # SparseArray(('g', 'region'), shape=(2, 2), nnz=3, absence='empty')
 grouped.coords["g"]  # SubsetCoord(2 of (3,), start=0)
 ```
 
-The grouped dimensions must be a leading prefix of the canonical order, which is what makes the result canonical as written rather than sorted afterwards. An entry at a coordinate the domain does not carry is not emitted. A non-zero `offset` numbers the result into an extent wider than its own members span, which is what lets several results share one destination buffer and one numbering.
+The grouped dimensions are a leading prefix of the canonical order, and `group` raises `ValueError` otherwise. The result is then canonical as written and requires no sort. An entry at a coordinate outside the domain is removed. A non-zero `offset` numbers the result into a wider extent, and several results then share one destination buffer and one numbering.
 
-A two-dimensional array exports as CSR triplets. Canonical order is sorted by row and then by column, which is CSR's own requirement, so the column indices and values are returned as views and only the row pointer is built:
+`to_csr` exports a two-dimensional array as CSR arrays. Canonical order sorts by row and then by column, the order CSR requires. The column indices and the values are returned as views, and only the row pointer is built:
 
 ```python
 indices, values, indptr = grouped.to_csr()
 # [0, 0, 1]  [5.0, 6.0, 7.0]  [0, 1, 3]
 ```
 
+`to_csr` raises `ValueError` where a row position is outside the extent of the first dimension, as a non-zero `offset` can produce.
+
 ## Assembling blocks into one buffer
 
-`EntryBuffer` is a preallocated index and value buffer handing out successive slices. A block computed directly into a reserved slice never exists as a separate object, so assembling several of them holds one copy of the result rather than one copy per block plus the result.
+`EntryBuffer` is a preallocated index and value buffer that returns successive slices. A block computed into a reserved slice never exists as a separate object. Assembling several blocks then keeps one copy of the result in memory, not one copy per block plus the result.
 
 ```python
 buffer = nb.EntryBuffer(ndim=2, capacity=10)
@@ -351,15 +356,15 @@ buffer.array(
 # SparseArray(('a', 'b'), shape=(4, 2), nnz=3, absence='empty')
 ```
 
-`buffer.array(...)` takes no copy, and `group`, `kernel.reduce_axis`, `kernel.gather` and `kernel.shift_axis` all accept such a slice as an `out=` destination.
+`buffer.array(...)` does not copy. `group`, `kernel.reduce_axis`, `kernel.gather` and `kernel.shift_axis` accept a reserved slice as the `out=` destination.
 
-`SparseArray.from_canonical` is the matching door for a caller that has built canonical buffers itself: it takes no copy, and the caller states that the index is sorted with no key repeated. `nb.is_canonical(index, shape)` answers that question where a caller cannot. Verifying it inside `from_canonical` would cost the ravel the path exists to avoid.
+`SparseArray.from_canonical` builds an array from canonical buffers without a copy. The caller guarantees that the index is sorted with no key repeated. `nb.is_canonical(index, shape)` checks that condition. `from_canonical` does not check it: the check requires the ravel that the method avoids.
 
 ## Performance
 
-The figures below are produced by the scripts in `benchmarks/` and vary with the machine.
+The scripts in `benchmarks/` produce the figures below. The figures vary with the machine.
 
-**Where sparse overtakes dense.** Addition of two 3000×3000 arrays, sweeping the fraction of the coordinate grid that carries a value (`bench_crossover.py`):
+**Crossover between sparse and dense.** Addition of two 3000×3000 arrays, over a range of densities: the fraction of the cells with a value (`bench_crossover.py`).
 
 | Density | Dense | Sparse | Dense memory | Sparse memory |
 |---|---|---|---|---|
@@ -368,9 +373,9 @@ The figures below are produced by the scripts in `benchmarks/` and vary with the
 | 1.0% | 9.91 ms | 7.66 ms | 72.0 MB | 1.4 MB |
 | 0.1% | 9.86 ms | 0.76 ms | 72.0 MB | 0.1 MB |
 
-The crossover in time sits near one per cent; memory favours the sparse form well before that. A dense grid is the faster representation for a well-populated frame, which is why both implementations exist and satisfy one contract.
+The crossover in time is near 1% density. The sparse form uses less memory at every density in the table. A dense grid is faster where most cells have a value, and the package has both implementations for that reason.
 
-**Why a dense array stores what it declares.** Operations on 2000×2000 float64 arrays at 90% density, under each encoding of presence (`bench_presence.py`):
+**Presence encoding of a dense array.** Operations on 2000×2000 float64 arrays at 90% density, for each encoding of presence (`bench_presence.py`).
 
 | Operation | Mask | NaN tag |
 |---|---|---|
@@ -379,9 +384,9 @@ The crossover in time sits near one per cent; memory favours the sparse form wel
 | Sum over present values | 4.66 ms | 8.61 ms |
 | Storage beside 32.0 MB of values | 4.0 MB | none |
 
-The two declarations want opposite encodings: an `"unknown"` array wants propagation, which NaN performs in the hardware, and an `"empty"` array wants substitution of the identity, which a mask performs in one pass. `DenseArray` therefore stores what it declares.
+The two declarations require opposite encodings. An `"unknown"` array requires propagation, and the hardware propagates NaN. An `"empty"` array requires substitution of the identity, and a mask substitutes it in one pass. `DenseArray` therefore stores NaN at an absent coordinate under `"unknown"`, and a boolean mask under `"empty"`.
 
-**Assembling into one buffer.** Peak against final memory while reducing blocks directly into a shared destination (`bench_assembly.py`):
+**Assembling into one buffer.** Peak memory against final memory, reducing blocks into a shared destination (`bench_assembly.py`).
 
 | Blocks | Final | Peak | Ratio |
 |---|---|---|---|
@@ -390,34 +395,34 @@ The two declarations want opposite encodings: an `"unknown"` array wants propaga
 | 8 | 128.00 MB | 137.00 MB | 1.07× |
 | 16 | 256.00 MB | 265.00 MB | 1.04× |
 
-The excess is constant at 9 MB and per-block: it is the transient working set of one sort-merge, not a second copy of the result, so the ratio falls as blocks accumulate.
+The excess is constant at 9 MB. It is the working set of one sort-merge, not a second copy of the result. The ratio therefore falls as the number of blocks grows.
 
 ## Architecture
 
-The package is two layers, and the seam between them is deliberate.
+The package has two layers.
 
-`kernel.py` is module-level functions over plain numpy buffers — `ravel`, `unravel`, `distinct`, `canonicalize`, `align`, `gather`, `reduce_axis`, `shift_axis`, `to_csr`, `lookup`, `first_repeat`, `is_canonical`. They take and return numpy arrays and know nothing of labels or dimensions. Every array operation is carried by them, so a compiled module satisfying the same signatures replaces the layer wholesale.
+`kernel.py` contains module-level functions over plain numpy buffers: `ravel`, `unravel`, `distinct`, `canonicalize`, `align`, `gather`, `reduce_axis`, `shift_axis`, `to_csr`, `lookup`, `first_repeat` and `is_canonical`. They take and return numpy arrays, and they use no labels or dimensions. Every array operation calls them. A compiled module with the same signatures can replace the layer.
 
-The array layer above — `SparseArray`, `DenseArray`, `Domain`, the coordinates — holds the labels, the frames and the refusals, and emits kernel calls in order.
+The array layer, `SparseArray`, `DenseArray`, `Domain` and the coordinates, stores the labels and the frames, validates the arguments, and calls the kernel functions.
 
-Several design choices are worth naming because they show up in the interface. Sorting is on a single int64 ravel key, so ordering over several dimensions is one `argsort` rather than a lexsort. Alignment is a merge over sorted keys with a take-vector per operand, rather than a hash join. A block whose keys already ascend is copied straight through instead of being permuted, because what a sort costs is applying it. Stored zeros are kept, because a stored zero states that a coordinate is present.
+Four design choices are visible in the interface. Sorting uses a single int64 ravel key: an order over several dimensions is one `argsort`, not a lexsort. Alignment is a merge over sorted keys with a take-vector per operand, not a hash join. A block whose keys already ascend is not sorted again. Stored zeros are kept: a stored zero marks a present coordinate.
 
-`nimblend.kernel` and an array's `.index` and `.data` read like interfaces and are not: a consumer of the package reaches them through the array layer. The public interface is the names `nimblend.__all__` exports, reached through the top-level module.
+`nimblend.kernel` and the `.index` and `.data` of an array are internal. A consumer calls them through the array layer. The public interface is the set of names in `nimblend.__all__`, imported from the top-level module.
 
-## Failure behaviour
+## Failure behavior
 
-The package raises rather than substituting a different behaviour and continuing. Operands whose labels differ, whose absence declarations differ, or whose frames share no dimension are refused; a duplicate coordinate in a constructed array is refused; a quotient at a coordinate the denominator does not carry is refused; a reduction or densification that would have to invent a value for an `"unknown"` array is refused until the caller states the policy. Each message names what was seen and what the contract expects.
+The package raises an exception and does not substitute another behavior. It raises `ValueError` for operands whose labels differ, whose absence declarations differ, or whose frames share no dimension. It raises `ValueError` for a repeated coordinate in a constructed array, and for a quotient where the denominator is absent. Under `"unknown"`, a reduction or `to_dense()` raises until the caller passes the policy. Each message reports the condition, then the action to take.
 
 ## Development
 
 ```bash
 pip install -e ".[dev]"
 
-pytest                       # 717 passed, 8 skipped
+pytest
 ruff check . && ruff format --check .
 ```
 
-The suite states the contract from several directions. `tests/conformance.py` holds one `Array` contract that both implementations are run against; `test_alignment_ladder.py` sweeps every pair of frames across all four operators and asserts that the two implementations answer alike; `test_kernel_*.py` state the buffer layer's contract with the array layer above it; and `test_boundary_vocabulary.py` scans the package's own source for names and words belonging to a consuming layer, so the vocabulary stays that of a labelled array.
+The suite tests the contract in four ways. `tests/conformance.py` defines one `Array` contract, and both implementations run against it. `test_alignment_ladder.py` tests every pair of frames with the four arithmetic operators, and checks that the two implementations return equal results. `test_kernel_*.py` test the buffer layer. `test_boundary_vocabulary.py` scans the source of the package for names and words of a consuming layer.
 
 ## Public interface
 
@@ -425,21 +430,21 @@ The suite states the contract from several directions. `tests/conformance.py` ho
 from nimblend import (
     Array,  # the contract; runtime-checkable, never constructed
     SparseArray,  # entries in canonical order
-    DenseArray,  # an ndarray over labelled dimensions
-    Domain,  # the coordinates carried over a tuple of dimensions
+    DenseArray,  # an ndarray over labeled dimensions
+    Domain,  # a set of coordinates over a tuple of dimensions
     EntryBuffer,  # one preallocated destination for several blocks
-    StoredCoord,  # labels held as an array
+    StoredCoord,  # labels stored as an array
     ProductCoord,  # positions of a full product of axis sizes
     SubsetCoord,  # positions of a subset of a product
     from_long,  # an array from label columns and a value column
     from_dense,  # an array from a grid and its labels
-    combined_dims,  # the frame a binary result carries
+    combined_dims,  # the frame of a binary result
     is_canonical,  # whether an index is sorted with no key repeated
 )
 ```
 
-## Licence
+## License
 
 MIT. See `LICENSE`.
 
-Citation metadata is in `CITATION.cff`.
+The citation metadata is in `CITATION.cff`.
