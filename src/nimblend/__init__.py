@@ -20,7 +20,7 @@ from nimblend.kernel import is_canonical
 from nimblend.protocol import Array
 from nimblend.sparse import SparseArray, combined_dims
 
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 
 __all__ = [
     "Array",

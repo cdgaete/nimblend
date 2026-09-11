@@ -13,6 +13,8 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ## Unreleased
 
+## 0.2.2 - 2026-09-11
+
 ### Changed
 
 - The README opens on the PyPI install and is written in technical English.
