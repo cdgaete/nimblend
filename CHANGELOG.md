@@ -25,9 +25,11 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
   array does not have: `sel`, `sum`, `mean`, `min`, `max`, `domain`,
   `coordinates`, `group`, `rename`, `shift` and `roll`. The message
   identifies the dimensions of the array. `rename` raises for a key that is
-  not a dimension of the array.
+  not a dimension of the array. `SparseArray.restrict` raises for a domain
+  over a dimension the array does not have, as `DenseArray.restrict` does.
 - `SparseArray`, `DenseArray` and `Domain` raise `ValueError` for a repeated
-  dimension name at construction, in `expand` and in `domain`.
+  dimension name at construction and in `expand`. `SparseArray.domain` and
+  `DenseArray.domain` raise it for a repeated name in `dims`.
 - `transpose` raises `ValueError` for a repeated dimension and for a name that
   is not a dimension, in both implementations and in `Domain`.
 

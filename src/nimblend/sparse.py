@@ -193,7 +193,16 @@ class SparseArray:
         return np.array(self.data, dtype=np.float64)
 
     def restrict(self, domain: Domain) -> "SparseArray":
-        """Return the entries whose coordinate over `domain.dims` is in `domain`."""
+        """Return the entries whose coordinate over `domain.dims` is in `domain`.
+
+        Raises ValueError for a domain over a dimension the array does not have.
+        """
+        lacking = [d for d in domain.dims if d not in self.dims]
+        if lacking:
+            raise ValueError(
+                f"dimension(s) {lacking} of the domain are not in the array over "
+                f"{self.dims}; pass a domain over dimensions of the array"
+            )
         at = domain.positions_of(self)
         keep = at >= 0
         if bool(keep.all()):
@@ -763,7 +772,11 @@ class SparseArray:
         return SparseArray(index, data, self.coords, self.dims, self.absence)
 
     def roll(self, shifts: Mapping[str, int]) -> "SparseArray":
-        """Return the entries shifted along each dimension, wrapping at the ends."""
+        """Return the entries shifted along each dimension, wrapping at the ends.
+
+        Raises ValueError for a dimension the array does not have.
+        """
+        known_dims("roll", shifts, self.dims)
         return self.shift(shifts, mode="wrap")
 
     def group(

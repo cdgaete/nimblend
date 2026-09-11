@@ -77,6 +77,8 @@ def test_a_dimension_the_array_lacks_raises_with_the_frame(array):
     with pytest.raises(ValueError, match=missing("rename")):
         array.rename({"q": "z"})
     with pytest.raises(ValueError, match=missing("shift")):
+        array.shift({"q": 1})
+    with pytest.raises(ValueError, match=missing("roll")):
         array.roll({"q": 1})
 
 
@@ -117,3 +119,19 @@ def test_a_transpose_over_a_name_that_is_not_a_dimension_raises(array):
     )
     with pytest.raises(ValueError, match=message):
         array.transpose("x", 1)
+
+
+@pytest.mark.parametrize("array", arrays(), ids=["dense", "sparse"])
+def test_a_domain_over_a_dimension_the_array_lacks_raises_in_restrict(array):
+    other = from_long(
+        ("q",),
+        {"q": StoredCoord(np.array([1, 2]))},
+        {"q": np.array([1])},
+        np.array([1.0]),
+    )
+    message = re.escape(
+        "dimension(s) ['q'] of the domain are not in the array over ('x', 'y'); "
+        "pass a domain over dimensions of the array"
+    )
+    with pytest.raises(ValueError, match=message):
+        array.restrict(other.domain())

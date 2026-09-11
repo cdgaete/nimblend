@@ -341,7 +341,11 @@ class DenseArray:
         return self._like(data, mask)
 
     def roll(self, shifts: Mapping[str, int]) -> "DenseArray":
-        """Return the values shifted along each dimension, wrapping at the ends."""
+        """Return the values shifted along each dimension, wrapping at the ends.
+
+        Raises ValueError for a dimension the array does not have.
+        """
+        known_dims("roll", shifts, self.dims)
         return self.shift(shifts, mode="wrap")
 
     def group(
