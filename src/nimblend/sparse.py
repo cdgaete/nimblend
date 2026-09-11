@@ -1,5 +1,6 @@
 """A sparse labeled array that stores only its entries, in canonical order."""
 
+from collections import Counter
 from collections.abc import Callable, Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
@@ -7,7 +8,14 @@ import numpy as np
 import numpy.typing as npt
 
 from nimblend import display, kernel
-from nimblend.coords import Coord, StoredCoord, SubsetCoord, python_value
+from nimblend.coords import (
+    Coord,
+    StoredCoord,
+    SubsetCoord,
+    known_dims,
+    python_value,
+    unique_dims,
+)
 from nimblend.domain import Domain
 from nimblend.protocol import ABSENCE
 
@@ -72,7 +80,7 @@ class SparseArray:
     ) -> None:
         if absence not in ABSENCE:
             raise ValueError(f"absence is 'empty' or 'unknown'; got {absence!r}")
-        self.dims = tuple(dims)
+        self.dims = unique_dims(dims)
         self.absence = absence
         missing = [d for d in self.dims if d not in coords]
         if missing:
@@ -150,7 +158,9 @@ class SparseArray:
             absence=repr(self.absence),
         )
 
-    def _axes_of(self, dims: Iterable[str]) -> list[int]:
+    def _axes_of(self, dims: Iterable[str], what: str) -> list[int]:
+        dims = tuple(dims)
+        known_dims(what, dims, self.dims)
         return [self.dims.index(name) for name in dims]
 
     def _sub_index(self, axes: list[int]) -> kernel.Index:
@@ -160,8 +170,8 @@ class SparseArray:
 
     def domain(self, dims: Iterable[str] | None = None) -> Domain:
         """Return the domain of the entries over `dims`."""
-        dims = self.dims if dims is None else tuple(dims)
-        axes = self._axes_of(dims)
+        dims = self.dims if dims is None else unique_dims(dims)
+        axes = self._axes_of(dims, "domain")
         shape = tuple(self.shape[axis] for axis in axes)
         keys = kernel.ravel(self._sub_index(axes), shape)
         coords = {name: self.coords[name] for name in dims}
@@ -169,8 +179,10 @@ class SparseArray:
 
     def coordinates(self, dims: Iterable[str] | None = None) -> kernel.Index:
         """Return the multi-index of each entry over `dims`, as a copy."""
-        dims = self.dims if dims is None else tuple(dims)
-        return np.array(self._sub_index(self._axes_of(dims)), dtype=np.int32)
+        dims = self.dims if dims is None else unique_dims(dims)
+        return np.array(
+            self._sub_index(self._axes_of(dims, "coordinates")), dtype=np.int32
+        )
 
     def values(self) -> kernel.Values:
         """Return the value of each entry, as a copy, in canonical order.
@@ -195,9 +207,10 @@ class SparseArray:
 
         The new dimensions are appended; `transpose` reorders them. A dimension
         of extent `k` multiplies the entry count by `k`. Raises ValueError for
-        a dimension the array already has or one without a coordinate.
+        a dimension the array already has or one without a coordinate, and
+        for a repeated dimension.
         """
-        dims = tuple(dims)
+        dims = unique_dims(dims)
         clash = [name for name in dims if name in self.dims]
         if clash:
             raise ValueError(
@@ -255,8 +268,10 @@ class SparseArray:
     def rename(self, names: Mapping[str, str]) -> "SparseArray":
         """Return the array with its dimensions renamed.
 
-        Raises ValueError when two dimensions map to one name.
+        Raises ValueError for a key that is not a dimension of the array, and
+        when two dimensions map to one name.
         """
+        known_dims("rename", names, self.dims)
         dims = tuple(names.get(d, d) for d in self.dims)
         if len(set(dims)) != len(dims):
             raise ValueError(
@@ -273,7 +288,7 @@ class SparseArray:
         `dims` contains each dimension once.
         """
         dims = tuple(reversed(self.dims)) if not dims else tuple(dims)
-        if sorted(dims) != sorted(self.dims):
+        if Counter(dims) != Counter(self.dims):
             raise ValueError(
                 f"transpose requires each dimension of {self.dims} once; got {dims}"
             )
@@ -285,8 +300,10 @@ class SparseArray:
     def sel(self, indexers: Mapping[str, Any]) -> "SparseArray":
         """Return the entries at the given labels, without the selected dimensions.
 
-        Raises KeyError for a label the coordinate does not contain.
+        Raises KeyError for a label the coordinate does not contain. Raises
+        ValueError for a dimension the array does not have.
         """
+        known_dims("sel", indexers, self.dims)
         index, data = self.index, self.data
         dims = list(self.dims)
         coords = dict(self.coords)
@@ -556,7 +573,7 @@ class SparseArray:
                 f"one array declares absence {self.absence!r} and the other "
                 f"{other.absence!r}; convert one with as_empty() or as_unknown()"
             )
-        axes = self._axes_of(other.dims)
+        axes = self._axes_of(other.dims, "align")
         shared_shape = tuple(self.shape[axis] for axis in axes)
         if shared_shape != other.shape:
             raise ValueError(
@@ -637,6 +654,8 @@ class SparseArray:
     def _reduce(
         self, dim: str | None, op: str, skip: bool | None, fill: float | None
     ) -> "SparseArray | float":
+        if dim is not None:
+            known_dims(op, (dim,), self.dims)
         self._policy(skip, fill)
         if dim is None:
             dense = self.data if fill is None else self._filled(fill)
@@ -734,12 +753,7 @@ class SparseArray:
         """
         if mode not in ("drop", "wrap"):
             raise ValueError(f"mode is 'drop' or 'wrap'; got {mode!r}")
-        missing = [name for name in shifts if name not in self.dims]
-        if missing:
-            raise ValueError(
-                f"shift dimension(s) {missing} are not in the array over "
-                f"{self.dims}; pass dimensions of the array"
-            )
+        known_dims("shift", shifts, self.dims)
         index, data = self.index, self.data
         for name, amount in shifts.items():
             axis = self.dims.index(name)
@@ -769,13 +783,13 @@ class SparseArray:
         of `into`. Raises ValueError for a negative `offset`, a `dims` that is not
         a leading prefix, or an `into` among the remaining dimensions.
         """
-        dims = tuple(dims)
+        dims = unique_dims(dims)
         offset = int(offset)
         if offset < 0:
             raise ValueError(
                 f"offset {offset} is negative; pass an offset of 0 or more"
             )
-        axes = self._axes_of(dims)
+        axes = self._axes_of(dims, "group")
         if axes != list(range(len(dims))):
             raise ValueError(
                 f"dimensions {dims} are at axes {axes} of {self.dims}, not a "

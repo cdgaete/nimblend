@@ -19,11 +19,17 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ### Fixed
 
-- `SparseArray.shift` and `DenseArray.shift` raise `ValueError` for a `mode`
-  other than "drop" or "wrap" when `shifts` is empty, and for a dimension the
-  array does not have. The message identifies the dimensions of the array.
-- `SparseArray.transpose` raises `ValueError` for a repeated dimension, as
-  `DenseArray.transpose` does.
+- `shift` and `roll` raise `ValueError` for a `mode` other than "drop" or
+  "wrap" when `shifts` is empty.
+- Every method that takes dimension names raises `ValueError` for a name the
+  array does not have: `sel`, `sum`, `mean`, `min`, `max`, `domain`,
+  `coordinates`, `group`, `rename`, `shift` and `roll`. The message
+  identifies the dimensions of the array. `rename` raises for a key that is
+  not a dimension of the array.
+- `SparseArray`, `DenseArray` and `Domain` raise `ValueError` for a repeated
+  dimension name at construction, in `expand` and in `domain`.
+- `transpose` raises `ValueError` for a repeated dimension and for a name that
+  is not a dimension, in both implementations and in `Domain`.
 
 ## 0.2.1 - 2026-09-11
 

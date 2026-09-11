@@ -1,5 +1,6 @@
 """A set of coordinates over a tuple of dimensions."""
 
+from collections import Counter
 from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
@@ -7,7 +8,7 @@ import numpy as np
 import numpy.typing as npt
 
 from nimblend import display, kernel
-from nimblend.coords import Coord, SubsetCoord, python_value
+from nimblend.coords import Coord, SubsetCoord, python_value, unique_dims
 from nimblend.kernel import Index, Keys, Positions
 
 if TYPE_CHECKING:
@@ -47,7 +48,7 @@ class Domain:
         self, dims: Iterable[str], coords: Mapping[str, Coord], shape: Iterable[int]
     ) -> None:
         """Set the dimensions, the shape and the coordinates of the frame."""
-        self.dims = tuple(dims)
+        self.dims = unique_dims(dims)
         self.shape = tuple(int(s) for s in shape)
         if len(self.dims) != len(self.shape):
             raise ValueError(
@@ -332,10 +333,11 @@ class Domain:
 
         The new dimensions are appended; `transpose` reorders them. A dimension
         of extent `k` multiplies the member count by `k`. Raises ValueError for
-        a dimension the domain already has or one without a coordinate. Raises
-        OverflowError when the product of the extents exceeds the int64 range.
+        a dimension the domain already has or one without a coordinate, and
+        for a repeated dimension. Raises OverflowError when the product of the
+        extents exceeds the int64 range.
         """
-        dims = tuple(dims)
+        dims = unique_dims(dims)
         clash = [name for name in dims if name in self.dims]
         if clash:
             raise ValueError(
@@ -373,7 +375,7 @@ class Domain:
         Raises ValueError unless `dims` contains each dimension once.
         """
         dims = tuple(dims)
-        if sorted(dims) != sorted(self.dims):
+        if Counter(dims) != Counter(self.dims):
             raise ValueError(
                 f"transpose requires each dimension of {self.dims} once; got {dims}"
             )

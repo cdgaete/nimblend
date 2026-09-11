@@ -71,7 +71,7 @@ The sum over `region` has two entries, not three. `cost` has no entry at 2050, a
 
 ## Six concepts
 
-The package defines six concepts. Each concept addresses a question that the previous one raises. Each subsection below shows the error that occurs without the concept.
+The package defines six concepts. Each concept addresses a question that follows from the previous one. Each subsection below shows the error that occurs without the concept.
 
 | | Concept | Question |
 |---|---|---|
@@ -128,7 +128,7 @@ a + c
 # conform one to the other first
 ```
 
-**Effect.** The frame of a result follows from the dimension names alone. An operand may be transposed, narrower than the other, or partially overlapping it, and the caller aligns nothing by hand. Where the labels differ, the operation raises and returns no value.
+**Effect.** The frame of a result follows from the dimension names alone. An operand may be transposed, narrower than the other, or partially overlapping it, and the caller reorders no operand. Where the labels differ, the operation raises and returns no value.
 
 ### 2. A dimension does not require stored labels
 
@@ -154,7 +154,7 @@ The two coordinates return the same label. One uses 80 MB, and the other a tuple
 
 `StoredCoord` builds the sorted permutation for lookups at the first lookup, not at construction. A stored coordinate that only defines the extent of a dimension never builds it.
 
-**Effect.** A dimension over millions of positions uses constant memory. A subset of a product is a coordinate of its own, not a full grid with missing cells.
+**Effect.** A `ProductCoord` over millions of positions stores only its axis sizes. A subset of a product is a coordinate of its own, not a full grid with missing cells.
 
 ### 3. Entries, or cells
 
@@ -162,7 +162,7 @@ Labels do not determine how many positions have a value. Each storage form suits
 
 `SparseArray` stores an index matrix, with one row per dimension and one column per entry, and a value buffer. It stores nothing for an absent coordinate. The entries are in canonical order: sorted by their C-order ravel key, with no key repeated. Canonical order makes alignment a merge over sorted keys, not a hash join.
 
-`DenseArray` stores an ndarray over the same labeled dimensions. It is faster where most cells have a value. The [Performance](#performance) section measures the crossover: near 1% density for time. The sparse form uses less memory at every density the section measures.
+`DenseArray` stores an ndarray over the same labeled dimensions. It is faster above about 1% density. The [Performance](#performance) section measures the crossover: near 1% density for time. The sparse form uses less memory at every density the section measures.
 
 Both implement the `Array` protocol. A consumer writes one piece of code and chooses the storage form by density:
 
@@ -279,9 +279,9 @@ nb.combined_dims(("P",), ("Q",))
 # share a dimension
 ```
 
-Two frames that share no dimension have no dimension to align on. Their combination is an outer product, and the operators raise `ValueError` for it. `expand` builds an outer product where the caller requires one.
+Two frames that share no dimension have no dimension to align on. Their combination is an outer product, and the operators raise `ValueError` for it. For an outer product, the caller first expands one operand over the dimensions of the other with `expand`.
 
-Alignment is by label. Operands whose shared dimension has different labels raise `ValueError`, as [section 1](#1-a-label-is-not-a-position) shows. They are not aligned by position. `conform` reconciles them: it reads an array at exactly the labels given, in the order given.
+Alignment is by label. An operation on operands whose shared dimension has different labels raises `ValueError`, as [section 1](#1-a-label-is-not-a-position) shows. It does not align them by position. `conform` reconciles them: it reads an array at exactly the labels given, in the order given.
 
 A quotient raises `ValueError` where the denominator is absent and the numerator has a value. The quotient at that coordinate is undefined: it is neither zero nor one.
 
@@ -373,7 +373,7 @@ The scripts in `benchmarks/` produce the figures below. The figures vary with th
 | 1.0% | 9.91 ms | 7.66 ms | 72.0 MB | 1.4 MB |
 | 0.1% | 9.86 ms | 0.76 ms | 72.0 MB | 0.1 MB |
 
-The crossover in time is near 1% density. The sparse form uses less memory at every density in the table. A dense grid is faster where most cells have a value, and the package has both implementations for that reason.
+The crossover in time is near 1% density. The sparse form uses less memory at every density in the table. A dense grid is faster above about 1% density, and the package has both implementations for that reason.
 
 **Presence encoding of a dense array.** Operations on 2000×2000 float64 arrays at 90% density, for each encoding of presence (`bench_presence.py`).
 
@@ -407,11 +407,11 @@ The array layer, `SparseArray`, `DenseArray`, `Domain` and the coordinates, stor
 
 Four design choices are visible in the interface. Sorting uses a single int64 ravel key: an order over several dimensions is one `argsort`, not a lexsort. Alignment is a merge over sorted keys with a take-vector per operand, not a hash join. A block whose keys already ascend is not sorted again. Stored zeros are kept: a stored zero marks a present coordinate.
 
-`nimblend.kernel` and the `.index` and `.data` of an array are internal. A consumer calls them through the array layer. The public interface is the set of names in `nimblend.__all__`, imported from the top-level module.
+`nimblend.kernel` and the `.index` and `.data` of an array are internal. A consumer uses them through the array layer. The public interface is the set of names in `nimblend.__all__`, imported from the top-level module.
 
 ## Failure behavior
 
-The package raises an exception and does not substitute another behavior. It raises `ValueError` for operands whose labels differ, whose absence declarations differ, or whose frames share no dimension. It raises `ValueError` for a repeated coordinate in a constructed array, and for a quotient where the denominator is absent. Under `"unknown"`, a reduction or `to_dense()` raises until the caller passes the policy. Each message reports the condition, then the action to take.
+The package raises an exception and does not substitute another behavior. It raises `ValueError` for operands whose labels differ, whose absence declarations differ, or whose frames share no dimension. It raises `ValueError` for a repeated coordinate in a constructed array, and for a quotient where the denominator is absent. A method that takes dimension names raises `ValueError` for a name the array does not have, and for a repeated name. Under `"unknown"`, a reduction or `to_dense()` raises until the caller passes the policy. Each message reports the condition, then the action to take.
 
 ## Development
 

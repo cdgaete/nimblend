@@ -6,7 +6,7 @@ Two coordinates are equal when they map the same labels to the same
 positions.
 """
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from typing import Any
 
 import numpy as np
@@ -16,6 +16,31 @@ from nimblend import kernel
 from nimblend.kernel import Positions
 
 type Labels = npt.NDArray[Any]
+
+
+def unique_dims(dims: Iterable[str]) -> tuple[str, ...]:
+    """Return `dims` as a tuple.
+
+    Raises ValueError for a dimension that appears more than once.
+    """
+    dims = tuple(dims)
+    repeated = list(dict.fromkeys(d for d in dims if dims.count(d) > 1))
+    if repeated:
+        raise ValueError(
+            f"dimension(s) {repeated} appear more than once in {dims}; pass each "
+            f"dimension once"
+        )
+    return dims
+
+
+def known_dims(what: str, requested: Iterable[Any], dims: tuple[str, ...]) -> None:
+    """Raise ValueError for a requested dimension that `dims` does not contain."""
+    missing = [d for d in requested if d not in dims]
+    if missing:
+        raise ValueError(
+            f"{what} dimension(s) {missing} are not in the array over {dims}; "
+            f"pass dimensions of the array"
+        )
 
 
 def python_value(value: Any) -> Any:

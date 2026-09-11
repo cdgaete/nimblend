@@ -1,5 +1,6 @@
 """A dense labeled array, with absence stored as NaN or as a boolean mask."""
 
+from collections import Counter
 from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
@@ -7,7 +8,7 @@ import numpy as np
 import numpy.typing as npt
 
 from nimblend import kernel
-from nimblend.coords import Coord, StoredCoord, python_value
+from nimblend.coords import Coord, StoredCoord, known_dims, python_value, unique_dims
 from nimblend.domain import Domain
 from nimblend.protocol import ABSENCE
 from nimblend.sparse import SparseArray, combined_dims
@@ -40,7 +41,7 @@ class DenseArray:
     ) -> None:
         if absence not in ABSENCE:
             raise ValueError(f"absence is 'empty' or 'unknown'; got {absence!r}")
-        self.dims = tuple(dims)
+        self.dims = unique_dims(dims)
         self.absence = absence
         missing = [d for d in self.dims if d not in coords]
         if missing:
@@ -160,7 +161,9 @@ class DenseArray:
             np.where(self.present, self.data, np.nan), self.coords, self.dims, "unknown"
         )
 
-    def _axes_of(self, dims: Iterable[str]) -> list[int]:
+    def _axes_of(self, dims: Iterable[str], what: str) -> list[int]:
+        dims = tuple(dims)
+        known_dims(what, dims, self.dims)
         return [self.dims.index(name) for name in dims]
 
     def _sparse(self) -> SparseArray:
@@ -171,11 +174,11 @@ class DenseArray:
 
     def coordinates(self, dims: Iterable[str] | None = None) -> kernel.Index:
         """Return the multi-index of each present coordinate, over `dims`."""
-        names = self.dims if dims is None else tuple(dims)
+        names = self.dims if dims is None else unique_dims(dims)
         index = np.stack(np.nonzero(self.present)).astype(np.int32)
         if names == self.dims:
             return index
-        return index[self._axes_of(names)]
+        return index[self._axes_of(names, "coordinates")]
 
     def values(self) -> kernel.Values:
         """Return the values of the present coordinates, in canonical order."""
@@ -183,7 +186,8 @@ class DenseArray:
 
     def domain(self, dims: Iterable[str] | None = None) -> Domain:
         """Return the domain of the present coordinates over `dims`."""
-        names = self.dims if dims is None else tuple(dims)
+        names = self.dims if dims is None else unique_dims(dims)
+        known_dims("domain", names, self.dims)
         shape = tuple(len(self.coords[d]) for d in names)
         keys = kernel.ravel(self.coordinates(names), shape)
         coords = {d: self.coords[d] for d in names}
@@ -199,7 +203,7 @@ class DenseArray:
             )
         members = np.zeros(domain.shape, dtype=bool)
         members[tuple(domain.coordinates())] = True
-        axes = self._axes_of(domain.dims)
+        axes = self._axes_of(domain.dims, "restrict")
         held = [1] * len(self.dims)
         for position, axis in enumerate(axes):
             held[axis] = domain.shape[position]
@@ -220,9 +224,9 @@ class DenseArray:
 
         The new dimensions are appended, as in `SparseArray.expand`;
         `transpose` reorders them. Raises ValueError for a dimension the array
-        already has or one without a coordinate.
+        already has or one without a coordinate, and for a repeated dimension.
         """
-        dims = tuple(dims)
+        dims = unique_dims(dims)
         clash = [name for name in dims if name in self.dims]
         if clash:
             raise ValueError(
@@ -267,8 +271,10 @@ class DenseArray:
     def rename(self, names: Mapping[str, str]) -> "DenseArray":
         """Return the array with its dimensions renamed.
 
-        Raises ValueError when two dimensions map to one name.
+        Raises ValueError for a key that is not a dimension of the array, and
+        when two dimensions map to one name.
         """
+        known_dims("rename", names, self.dims)
         dims = tuple(names.get(d, d) for d in self.dims)
         if len(set(dims)) != len(dims):
             raise ValueError(
@@ -285,19 +291,21 @@ class DenseArray:
         `dims` contains each dimension once.
         """
         dims = tuple(reversed(self.dims)) if not dims else tuple(dims)
-        if sorted(dims) != sorted(self.dims):
+        if Counter(dims) != Counter(self.dims):
             raise ValueError(
                 f"transpose requires each dimension of {self.dims} once; got {dims}"
             )
-        axes = self._axes_of(dims)
+        axes = self._axes_of(dims, "transpose")
         mask = None if self.mask is None else np.transpose(self.mask, axes)
         return self._like(np.transpose(self.data, axes), mask, dims)
 
     def sel(self, indexers: Mapping[str, Any]) -> "DenseArray":
         """Return the values at the given labels, without the selected dimensions.
 
-        Raises KeyError for a label the coordinate does not contain.
+        Raises KeyError for a label the coordinate does not contain. Raises
+        ValueError for a dimension the array does not have.
         """
+        known_dims("sel", indexers, self.dims)
         data, mask, dims = self.data, self.mask, list(self.dims)
         coords = dict(self.coords)
         for name, label in indexers.items():
@@ -319,12 +327,7 @@ class DenseArray:
         """
         if mode not in ("drop", "wrap"):
             raise ValueError(f"mode is 'drop' or 'wrap'; got {mode!r}")
-        missing = [name for name in shifts if name not in self.dims]
-        if missing:
-            raise ValueError(
-                f"shift dimension(s) {missing} are not in the array over "
-                f"{self.dims}; pass dimensions of the array"
-            )
+        known_dims("shift", shifts, self.dims)
         data, mask = self.data, self.present
         for name, amount in shifts.items():
             axis = self.dims.index(name)
@@ -648,6 +651,8 @@ class DenseArray:
     def _reduce(
         self, dim: str | None, op: str, skip: bool | None, fill: float | None
     ) -> "DenseArray | float":
+        if dim is not None:
+            known_dims(op, (dim,), self.dims)
         self._policy(skip, fill)
         present = self.present
         if fill is None:
