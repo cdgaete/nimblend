@@ -13,6 +13,8 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ## Unreleased
 
+## 0.2.0 - 2026-09-11
+
 ### Changed
 
 - The package supports Python 3.12, 3.13 and 3.14, and numpy from 2.3.
