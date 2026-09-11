@@ -13,6 +13,14 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ## Unreleased
 
+### Fixed
+
+- `SparseArray.shift` and `DenseArray.shift` raise `ValueError` for a `mode`
+  other than "drop" or "wrap" when `shifts` is empty, and for a dimension the
+  array does not have. The message identifies the dimensions of the array.
+- `SparseArray.transpose` raises `ValueError` for a repeated dimension, as
+  `DenseArray.transpose` does.
+
 ## 0.2.1 - 2026-09-11
 
 ### Changed

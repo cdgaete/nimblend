@@ -270,12 +270,12 @@ class SparseArray:
         """Return the array with its dimensions in the given order.
 
         Without arguments the order is reversed. Raises ValueError unless
-        `dims` contains every dimension of the array.
+        `dims` contains each dimension once.
         """
         dims = tuple(reversed(self.dims)) if not dims else tuple(dims)
-        if set(dims) != set(self.dims):
+        if sorted(dims) != sorted(self.dims):
             raise ValueError(
-                f"transpose requires every dimension of {self.dims}; got {dims}"
+                f"transpose requires each dimension of {self.dims} once; got {dims}"
             )
         order = [self.dims.index(d) for d in dims]
         return SparseArray(
@@ -729,8 +729,17 @@ class SparseArray:
         """Return the entries moved along each dimension in `shifts`.
 
         `mode` is "drop" or "wrap". Under "drop" an entry moved outside the
-        frame is removed.
+        frame is removed. Raises ValueError for another `mode`, and for a
+        dimension the array does not have.
         """
+        if mode not in ("drop", "wrap"):
+            raise ValueError(f"mode is 'drop' or 'wrap'; got {mode!r}")
+        missing = [name for name in shifts if name not in self.dims]
+        if missing:
+            raise ValueError(
+                f"shift dimension(s) {missing} are not in the array over "
+                f"{self.dims}; pass dimensions of the array"
+            )
         index, data = self.index, self.data
         for name, amount in shifts.items():
             axis = self.dims.index(name)

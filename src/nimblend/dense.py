@@ -314,12 +314,19 @@ class DenseArray:
         """Return the values moved along each dimension in `shifts`.
 
         `mode` is "drop" or "wrap". Under "drop" a value moved outside the
-        frame is removed. A shift of 0 removes no value.
+        frame is removed. A shift of 0 removes no value. Raises ValueError for
+        another `mode`, and for a dimension the array does not have.
         """
+        if mode not in ("drop", "wrap"):
+            raise ValueError(f"mode is 'drop' or 'wrap'; got {mode!r}")
+        missing = [name for name in shifts if name not in self.dims]
+        if missing:
+            raise ValueError(
+                f"shift dimension(s) {missing} are not in the array over "
+                f"{self.dims}; pass dimensions of the array"
+            )
         data, mask = self.data, self.present
         for name, amount in shifts.items():
-            if mode not in ("drop", "wrap"):
-                raise ValueError(f"mode is 'drop' or 'wrap'; got {mode!r}")
             axis = self.dims.index(name)
             data = np.roll(data, amount, axis=axis)
             mask = np.roll(mask, amount, axis=axis)

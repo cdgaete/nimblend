@@ -105,10 +105,12 @@ def canonicalize(
     """Return `idx` and `data` sorted by index, with no repeated entry.
 
     `on_duplicate` is "sum" or "raise". At a repeated entry, "sum" adds the
-    values, and "raise" or another value raises ValueError. Entries with value
-    zero are kept. With `out` the result is written into `out`. The result
-    does not share memory with a non-empty input.
+    values and "raise" raises ValueError. Raises ValueError for another
+    `on_duplicate`. Entries with value zero are kept. With `out` the result is
+    written into `out`. The result does not share memory with a non-empty input.
     """
+    if on_duplicate not in ("sum", "raise"):
+        raise ValueError(f"on_duplicate is 'sum' or 'raise'; got {on_duplicate!r}")
     if data.size == 0:
         return _emit(idx, data, out)
     keys = ravel(idx, shape)
@@ -133,9 +135,6 @@ def canonicalize(
             f"index {tuple(int(v) for v in idx[:, at])} is repeated; pass each "
             f"coordinate once"
         )
-    if on_duplicate != "sum":
-        raise ValueError(f"on_duplicate is 'sum' or 'raise'; got {on_duplicate!r}")
-
     starts = np.flatnonzero(first)
     return _emit(idx[:, starts], np.add.reduceat(data, starts), out)
 
