@@ -812,7 +812,7 @@ class SparseArray:
             raise ValueError(
                 f"row positions range from {int(self.index[0, 0])} to "
                 f"{int(self.index[0, -1])} and dimension {self.dims[0]!r} has "
-                f"extent {rows}; pass an array with row positions from 0 to "
+                f"extent {rows}; call to_csr on an array with row positions from 0 to "
                 f"{rows - 1}"
             )
         return kernel.to_csr(self.index, self.data, self.shape)

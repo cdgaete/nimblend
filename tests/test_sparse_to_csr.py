@@ -1,3 +1,5 @@
+import re
+
 import numpy as np
 import pytest
 
@@ -35,10 +37,14 @@ def test_indices_are_int32_so_a_solver_takes_them_without_a_cast():
 
 
 def test_to_csr_refuses_rows_outside_the_row_extent():
-    # a block numbered from an offset carries rows its own coordinate does
-    # not span; a row pointer built over that extent would claim no entries
+    # a block numbered from an offset has row positions beyond the extent of
+    # its own coordinate
     index = np.array([[10, 11], [1, 0]], dtype=np.int32)
     coords = {"r": StoredCoord(np.arange(3)), "c": StoredCoord(np.arange(4))}
     arr = SparseArray.from_canonical(index, np.array([5.0, 6.0]), coords, ("r", "c"))
-    with pytest.raises(ValueError, match="row"):
+    message = (
+        "row positions range from 10 to 11 and dimension 'r' has extent 3; "
+        "call to_csr on an array with row positions from 0 to 2"
+    )
+    with pytest.raises(ValueError, match=re.escape(message)):
         arr.to_csr()
