@@ -73,7 +73,7 @@ def test_an_unknown_array_conforms_and_keeps_its_tag():
 
 
 def test_a_label_the_array_does_not_carry_is_refused():
-    with pytest.raises(KeyError, match="is not carried"):
+    with pytest.raises(KeyError, match="label 'z' is not in the coordinate"):
         full().conform(["x", "y"], {"x": np.array(["z"]), "y": np.array([10])})
 
 
@@ -86,15 +86,15 @@ def test_conform_does_not_disturb_the_array_it_was_applied_to():
 
 def test_a_label_named_twice_is_refused():
     # a repeat would ask one position to occupy two
-    with pytest.raises(ValueError, match="is named twice for dimension 'x'"):
+    with pytest.raises(ValueError, match="appears twice for dimension 'x'"):
         full().conform(["x", "y"], {"x": np.array(["a", "a"]), "y": LABELS["y"]})
 
 
 def test_a_repeat_is_refused_on_whichever_dimension_carries_it():
-    with pytest.raises(ValueError, match="is named twice for dimension 'y'"):
+    with pytest.raises(ValueError, match="appears twice for dimension 'y'"):
         full().conform(["x", "y"], {"x": LABELS["x"], "y": np.array([10, 10])})
 
 
 def test_a_repeat_is_refused_before_any_value_is_read():
-    with pytest.raises(ValueError, match="conform reads each position"):
+    with pytest.raises(ValueError, match="pass each label once"):
         holed().conform(["x", "y"], {"x": np.array(["c", "c"]), "y": np.array([20])})

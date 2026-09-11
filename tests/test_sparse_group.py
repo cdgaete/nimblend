@@ -77,7 +77,7 @@ def test_group_refuses_dimensions_that_are_not_a_leading_prefix():
 
 
 def test_group_refuses_a_name_the_remaining_dimensions_already_use():
-    with pytest.raises(ValueError, match="already carried"):
+    with pytest.raises(ValueError, match="already has"):
         ijc().group(("i", "j"), "c")
 
 

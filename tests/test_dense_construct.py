@@ -49,7 +49,7 @@ def test_an_empty_array_reads_its_absence_from_the_mask():
 
 
 def test_an_unknown_array_refuses_a_mask():
-    with pytest.raises(ValueError, match="carries no mask"):
+    with pytest.raises(ValueError, match="mask is not supported"):
         build(VALUES, LABELS, "unknown", np.ones((2, 3), dtype=bool))
 
 

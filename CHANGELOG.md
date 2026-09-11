@@ -13,6 +13,13 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ## Unreleased
 
+### Changed
+
+- The error messages and docstrings are written in technical English. Each
+  message reports the condition, then the action to take. The text of
+  several messages changed. A label in a message prints as its value, as in
+  the `KeyError` message `label 'zz' is not in the coordinate`.
+
 ## 0.2.0 - 2026-09-11
 
 ### Changed

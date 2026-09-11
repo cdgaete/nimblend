@@ -1,4 +1,4 @@
-"""One preallocated COO destination that blocks are computed into."""
+"""A preallocated COO buffer that blocks are written into."""
 
 import numpy as np
 
@@ -8,11 +8,10 @@ from nimblend.sparse import SparseArray
 
 
 class EntryBuffer:
-    """A fixed index and value buffer handing out successive slices.
+    """A fixed index and value buffer, reserved in successive slices.
 
-    A block computed into a reserved slice never exists as a separate object,
-    so assembling several of them holds one copy of the result rather than
-    one copy per block plus the result.
+    `reserve` returns views into the buffer. A method given such a view as
+    `out`, for example `SparseArray.group`, writes its entries into the view.
     """
 
     def __init__(self, ndim: int, capacity: int) -> None:
@@ -28,19 +27,24 @@ class EntryBuffer:
         )
 
     def reserve(self, n: int) -> Block:
-        """A destination `(index, data)` for `n` entries, advancing the cursor."""
+        """Return views `(index, data)` for the next `n` entries.
+
+        The cursor advances by `n`. Raises ValueError when the reservation
+        exceeds the capacity.
+        """
         n = int(n)
         if self.at + n > self.capacity:
             raise ValueError(
-                f"reserving {n} entries at {self.at} exceeds the capacity "
-                f"{self.capacity}"
+                f"reserving {n} entries at position {self.at} exceeds the "
+                f"capacity {self.capacity}; reserve at most "
+                f"{self.capacity - self.at} entries"
             )
         dest = (self.index[:, self.at : self.at + n], self.data[self.at : self.at + n])
         self.at += n
         return dest
 
     def written(self) -> tuple[Index, Values]:
-        """Views of the entries reserved so far."""
+        """Return views of the reserved entries."""
         return self.index[:, : self.at], self.data[: self.at]
 
     def array(
@@ -49,6 +53,9 @@ class EntryBuffer:
         dims: tuple[str, ...],
         absence: str = "empty",
     ) -> SparseArray:
-        """The written prefix as an array, taking no copy."""
+        """Return the reserved entries as a `SparseArray`, without a copy.
+
+        The entries must be in canonical order; `is_canonical` checks this.
+        """
         index, data = self.written()
         return SparseArray.from_canonical(index, data, coords, dims, absence)

@@ -134,14 +134,14 @@ def test_conform_refuses_a_label_the_array_lacks():
 
 def test_a_reduction_refuses_a_skip_that_is_not_true():
     arr = two_d([(0, 0, 1.0)], absence="unknown")
-    with pytest.raises(ValueError, match="skip states"):
+    with pytest.raises(ValueError, match="skip is True or None"):
         arr.sum(skip=False)
 
 
 def test_a_reduction_refuses_both_policies_under_either_absence():
     for absence in ("empty", "unknown"):
         arr = two_d([(0, 0, 1.0)], absence=absence)
-        with pytest.raises(ValueError, match="not both"):
+        with pytest.raises(ValueError, match="given together"):
             arr.sum(skip=True, fill=0.0)
 
 
@@ -162,7 +162,7 @@ def test_densifying_an_empty_array_carries_zero_where_it_holds_nothing():
 
 def test_conform_refuses_a_label_named_twice():
     arr = two_d([(0, 0, 1.0), (1, 1, 2.0)], shape=(2, 3))
-    with pytest.raises(ValueError, match="named twice"):
+    with pytest.raises(ValueError, match="appears twice"):
         arr.conform(["x", "y"], {"x": np.array([0, 0, 1]), "y": np.array([0, 1, 2])})
 
 

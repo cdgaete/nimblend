@@ -45,7 +45,7 @@ def test_subset_coord_position_is_the_entry_rank():
 
 def test_subset_coord_refuses_a_cell_it_does_not_hold():
     c = coords.SubsetCoord(np.array([1, 5], dtype=np.int64), (3, 3))
-    with pytest.raises(KeyError, match="not carried"):
+    with pytest.raises(KeyError, match="is not in the subset"):
         c.to_position(np.array([[2], [2]], dtype=np.int32))
 
 

@@ -1,12 +1,10 @@
 """Labeled sparse N-dimensional arrays.
 
-`Array` is the contract and is never constructed. `SparseArray` holds only
-the entries it carries; `from_long` builds one from the label-and-value
-columns a columnar store holds. A `Domain` is the set of coordinates an
-array carries over a tuple of its dimensions, and answers with an array of
-its own: `array` values its members, `identity` pairs each with its position
-along a new dimension. `combined_dims` names the frame a binary operator's
-result carries, which a caller reads before materialising either operand.
+`SparseArray` and `DenseArray` implement the `Array` protocol. `SparseArray`
+stores only the entries that are present. `from_long` builds one from one
+label column per dimension and one value column. A `Domain` is a set of
+coordinates over a tuple of dimensions. `combined_dims` returns the
+dimensions of a binary result from the dimensions of the two operands.
 """
 
 from collections.abc import Iterable, Mapping
@@ -48,29 +46,35 @@ def from_long(
     values: npt.ArrayLike,
     absence: str = "empty",
 ) -> SparseArray:
-    """An array from one label column per dimension and one value column.
+    """Return an array from one label column per dimension and one value column.
 
-    Each label resolves through its dimension's own coordinate, so a caller
-    already holding one states its entries in the labels a columnar store
-    carries rather than in positions it would resolve twice. The columns name
-    the same entries and are read in step, so they have equal length.
+    Each label column is converted to positions by the coordinate of its
+    dimension. All columns have equal length. Raises ValueError for a missing
+    coordinate or label column and for columns of different lengths. Raises
+    KeyError for a label the coordinate does not contain.
     """
     dims = tuple(dims)
     values = np.asarray(values, dtype=np.float64)
     missing = [d for d in dims if d not in coords]
     if missing:
-        raise ValueError(f"no coordinate for dimension(s) {missing}")
+        raise ValueError(
+            f"no coordinate for dimension(s) {missing}; pass a coordinate for "
+            f"each dimension"
+        )
     absent = [d for d in dims if d not in labels]
     if absent:
-        raise ValueError(f"no label column for dimension(s) {absent}")
+        raise ValueError(
+            f"no label column for dimension(s) {absent}; pass a label column "
+            f"for each dimension"
+        )
     index = []
     for name in dims:
         column = np.asarray(labels[name])
         if column.size != values.size:
             raise ValueError(
                 f"label column {name!r} has length {column.size} and the "
-                f"value column has length {values.size}; they name the same "
-                f"entries"
+                f"value column has length {values.size}; pass columns of equal "
+                f"length"
             )
         index.append(np.asarray(coords[name].to_position(column), dtype=np.int32))
     return SparseArray(np.stack(index), values, coords, dims, absence)
@@ -81,5 +85,5 @@ def from_dense(
     labels: Mapping[str, npt.ArrayLike],
     absence: str = "empty",
 ) -> SparseArray:
-    """An array holding every cell of `values` as an entry."""
+    """Return an array with every cell of `values` as an entry."""
     return SparseArray.from_dense(values, labels, absence=absence)

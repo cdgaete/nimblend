@@ -1,7 +1,7 @@
-"""How an array and its parts render in a terminal and in a notebook.
+"""Text and HTML representations of arrays and domains.
 
-A rendered array shows a head of the entries it carries, never the whole of
-a large one, and resolves labels for that head alone.
+A representation shows at most the first `HEAD` entries and resolves labels
+for those entries only.
 """
 
 import html
@@ -25,25 +25,24 @@ _STYLE = (
 def one_line(
     name: str, dims: Sequence[str], shape: Sequence[int], **extra: object
 ) -> str:
-    """`name(dims, shape=..., ...)`, the form a terminal shows."""
+    """Return the one-line form `name(dims, shape=..., ...)`."""
     fields = [repr(tuple(dims)), f"shape={tuple(shape)}"]
     fields.extend(f"{key}={value}" for key, value in extra.items())
     return f"{name}({', '.join(fields)})"
 
 
-def as_text(answered: npt.ArrayLike) -> list[str]:
-    """One string per entry, whatever shape a coordinate answered with.
+def as_text(labels: npt.ArrayLike) -> list[str]:
+    """Return one string per entry from the result of a coordinate's `to_index`.
 
-    A stored coordinate answers one label per entry; a generated one answers
-    the index matrix its members stand for, so a member reads as the
-    coordinate tuple rather than a single label.
+    A one-dimensional input has one label per entry. A two-dimensional input
+    is an index matrix, and each column is written as a tuple of integers.
     """
-    answered = np.asarray(answered)
-    if answered.ndim == 1:
-        return [str(value) for value in answered]
+    labels = np.asarray(labels)
+    if labels.ndim == 1:
+        return [str(value) for value in labels]
     return [
-        "(" + ", ".join(str(int(value)) for value in answered[:, at]) + ")"
-        for at in range(answered.shape[1])
+        "(" + ", ".join(str(int(value)) for value in labels[:, at]) + ")"
+        for at in range(labels.shape[1])
     ]
 
 
@@ -56,10 +55,10 @@ def table(
     total: int,
     **extra: object,
 ) -> str:
-    """A head of `entries` as an HTML table under the one-line summary.
+    """Return an HTML table of `entries` below the one-line summary.
 
-    `entries` carries at most the head; `total` is how many exist, so a
-    caller resolves labels for the head alone and states the rest here.
+    `entries` contains at most the first `HEAD` entries. `total` is the
+    number of entries in the array, reported below the table.
     """
     summary = html.escape(one_line(name, dims, shape, **extra), quote=False)
     if total == 0:

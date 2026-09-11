@@ -1,11 +1,9 @@
-"""What a dimension's positions are named by.
+"""The mapping between the labels and the positions of a dimension.
 
-A coordinate answers both directions of the label question. A stored one
-holds an array of labels; a generated one computes the answer, so a
-dimension spanning millions of positions costs nothing to carry.
-
-Two coordinates are equal when they name the same positions, which is what
-lets an operation refuse operands whose labels differ.
+`StoredCoord` stores its labels in an array. `ProductCoord` and `SubsetCoord`
+store no labels. Their labels are multi-indices, computed on each lookup.
+Two coordinates are equal when they map the same labels to the same
+positions.
 """
 
 from collections.abc import Sequence
@@ -20,8 +18,13 @@ from nimblend.kernel import Positions
 type Labels = npt.NDArray[Any]
 
 
+def python_value(value: Any) -> Any:
+    """Return a numpy scalar as the equivalent Python value, for a message."""
+    return value.item() if isinstance(value, np.generic) else value
+
+
 class StoredCoord:
-    """Labels held as an array."""
+    """A coordinate that stores its labels in an array."""
 
     def __init__(self, labels: npt.ArrayLike) -> None:
         self.labels = np.asarray(labels)
@@ -40,11 +43,10 @@ class StoredCoord:
         return bool(np.array_equal(self.labels, other.labels))
 
     def _lookup_order(self) -> tuple[Positions, Labels]:
-        """The sorted labels and their positions, built on the first lookup.
+        """Return the sort order and the sorted labels, computed on first use.
 
-        A coordinate carried only to name a dimension's extent is never asked
-        where a label sits, so the permutation and the sorted copy it needs —
-        together twice the labels themselves — are built when one is.
+        The two arrays are cached on the instance. A coordinate with no label
+        lookup does not allocate them.
         """
         order, sorted_labels = self._order, self._sorted
         if order is None or sorted_labels is None:
@@ -54,23 +56,30 @@ class StoredCoord:
         return order, sorted_labels
 
     def to_position(self, labels: npt.ArrayLike) -> Positions:
-        """Positions the given labels occupy."""
+        """Return the position of each label.
+
+        Raises KeyError for a label the coordinate does not contain.
+        """
         labels = np.asarray(labels)
         order, sorted_labels = self._lookup_order()
         at = np.searchsorted(sorted_labels, labels)
         probe = np.minimum(at, sorted_labels.size - 1)
         miss = sorted_labels[probe] != labels
         if miss.any():
-            raise KeyError(f"label {labels[miss][0]!r} is not carried")
+            label = python_value(labels[miss][0])
+            raise KeyError(
+                f"label {label!r} is not in the coordinate; pass only labels "
+                f"the coordinate contains"
+            )
         return order[at]
 
     def to_index(self, positions: Positions) -> Labels:
-        """Labels at the given positions."""
+        """Return the label at each position."""
         return self.labels[positions]
 
 
 class ProductCoord:
-    """Positions of a full product of axis sizes, numbered from `start`."""
+    """A coordinate over the full product of axis sizes, numbered from `start`."""
 
     def __init__(self, sizes: Sequence[int], start: int = 0) -> None:
         self.sizes = tuple(int(s) for s in sizes)
@@ -91,19 +100,20 @@ class ProductCoord:
         return self.sizes == other.sizes and self.start == other.start
 
     def to_position(self, index: npt.NDArray[Any]) -> kernel.Keys:
-        """Positions the given index matrix occupies."""
+        """Return the position of each column of an index matrix."""
         return kernel.ravel(index, self.sizes) + self.start
 
     def to_index(self, positions: Positions) -> kernel.Index:
-        """The index matrix the given positions stand for."""
+        """Return the index matrix at the given positions."""
         return kernel.unravel(np.asarray(positions) - self.start, self.sizes)
 
 
 class SubsetCoord:
-    """Positions of a subset of a product, numbered from `start` in code order.
+    """A coordinate over a subset of a product, in code order from `start`.
 
-    An entry's position is its rank among the codes, so a block already in
-    canonical order needs no lookup at all.
+    `codes` are the raveled keys of the members and must ascend without
+    repeats. The position of a member is its rank among the codes plus
+    `start`.
     """
 
     def __init__(
@@ -129,7 +139,10 @@ class SubsetCoord:
         )
 
     def to_position(self, index: npt.NDArray[Any]) -> kernel.Keys:
-        """Positions the given index matrix occupies."""
+        """Return the position of each column of an index matrix.
+
+        Raises KeyError for a cell the subset does not contain.
+        """
         keys = kernel.ravel(index, self.sizes)
         at = np.searchsorted(self.codes, keys)
         probe = np.minimum(at, self.codes.size - 1)
@@ -137,12 +150,12 @@ class SubsetCoord:
         if miss.any():
             raise KeyError(
                 f"cell {tuple(int(v) for v in index[:, np.flatnonzero(miss)[0]])} "
-                f"is not carried by this subset"
+                f"is not in the subset; pass only cells the subset contains"
             )
         return at + self.start
 
     def to_index(self, positions: Positions) -> kernel.Index:
-        """The index matrix the given positions stand for."""
+        """Return the index matrix at the given positions."""
         return kernel.unravel(
             self.codes[np.asarray(positions) - self.start], self.sizes
         )

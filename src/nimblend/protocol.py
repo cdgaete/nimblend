@@ -1,4 +1,4 @@
-"""The contract an array satisfies, and what an absent entry means."""
+"""The `Array` protocol and the two values of `absence`."""
 
 from typing import Any, Protocol, runtime_checkable
 
@@ -9,16 +9,11 @@ ABSENCE = ("empty", "unknown")
 class Array(Protocol):
     """A labeled N-dimensional array.
 
-    `absence` states what a coordinate the array does not carry means:
-    `"empty"` that it contributes nothing, `"unknown"` that it was not
-    modelled. Operators and reductions follow from that declaration, so the
-    arithmetic is part of the contract rather than an implementation's own:
-    a consumer writing `weights * entries` is writing against this.
-
-    `coords` answers the label question per dimension. It holds coordinates
-    rather than label arrays, so a dimension spanning millions of positions
-    costs nothing to carry; `labels` names the label arrays a caller states
-    and reads back, and is never a coordinate.
+    `absence` declares the meaning of a coordinate with no value: `"empty"`
+    means it contributes nothing, and `"unknown"` means it is not modeled.
+    The operators and reductions of every implementation follow this
+    declaration. `coords` maps each dimension to a coordinate object. A
+    `labels` parameter always takes arrays of labels, never a coordinate.
     """
 
     dims: tuple[str, ...]

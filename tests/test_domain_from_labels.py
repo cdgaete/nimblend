@@ -45,7 +45,7 @@ def test_members_named_out_of_order_are_sorted():
 
 
 def test_a_member_named_twice_raises_naming_it():
-    with pytest.raises(ValueError, match="named twice"):
+    with pytest.raises(ValueError, match="appears twice"):
         Domain.from_labels(
             ("x", "y"),
             coords_xy(),
@@ -63,7 +63,7 @@ def test_a_label_the_coordinate_does_not_carry_raises():
 
 
 def test_label_columns_of_differing_length_raise():
-    with pytest.raises(ValueError, match="differing length"):
+    with pytest.raises(ValueError, match="different lengths"):
         Domain.from_labels(
             ("x", "y"),
             coords_xy(),
@@ -125,7 +125,7 @@ def test_an_index_matrix_names_its_members_in_any_order():
 
 
 def test_an_index_matrix_naming_a_member_twice_raises():
-    with pytest.raises(ValueError, match="named twice"):
+    with pytest.raises(ValueError, match="appears twice"):
         Domain.from_coordinates(
             ("x", "y"), coords_xy(), np.array([[0, 0], [1, 1]], dtype=np.int32)
         )

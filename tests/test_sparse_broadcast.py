@@ -155,7 +155,7 @@ def test_overlapping_operands_disagreeing_on_labels_are_refused():
     b = SparseArray.from_dense(
         np.ones((2, 2)), {"L": np.array(["x", "z"]), "T": np.arange(2)}
     )
-    with pytest.raises(ValueError, match="aligned by its label"):
+    with pytest.raises(ValueError, match="have different labels"):
         a * b
 
 

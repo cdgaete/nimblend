@@ -154,7 +154,7 @@ def test_the_two_implementations_refuse_a_repeated_label_alike(seed, density, ab
     sparse, dense = pair(seed, density, absence)
     wanted = {"x": np.array(["a", "a"]), "y": LABELS["y"]}
     for arr in (dense, sparse):
-        with pytest.raises(ValueError, match="is named twice for dimension"):
+        with pytest.raises(ValueError, match="appears twice for dimension"):
             arr.conform(["x", "y"], wanted)
 
 

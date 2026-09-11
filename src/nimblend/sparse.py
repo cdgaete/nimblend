@@ -1,4 +1,4 @@
-"""A labeled array holding only the entries it carries."""
+"""A sparse labeled array that stores only its entries, in canonical order."""
 
 from collections.abc import Callable, Iterable, Mapping
 from typing import TYPE_CHECKING, Any
@@ -7,7 +7,7 @@ import numpy as np
 import numpy.typing as npt
 
 from nimblend import display, kernel
-from nimblend.coords import Coord, StoredCoord, SubsetCoord
+from nimblend.coords import Coord, StoredCoord, SubsetCoord, python_value
 from nimblend.domain import Domain
 from nimblend.protocol import ABSENCE
 
@@ -20,13 +20,11 @@ type Binary = Callable[[Any, Any], Any]
 
 
 def combined_dims(left: tuple[str, ...], right: tuple[str, ...]) -> tuple[str, ...]:
-    """The frame a binary result carries, from the two operands' dimensions.
+    """Return the dimensions of a binary result from the operands' dimensions.
 
-    Equal frames keep their order; a frame nesting inside another takes the
-    wider; frames that overlap take the left operand's dimensions followed by
-    the dimensions only the right carries. Frames sharing no dimension have
-    nothing to align on, and their combination is an outer product no caller
-    asked for.
+    Equal frames keep their order. A frame nested in the other gives the
+    wider frame. Overlapping frames give the left dimensions, then those only
+    the right has. Raises ValueError for frames that share no dimension.
     """
     if left == right:
         return left
@@ -37,17 +35,18 @@ def combined_dims(left: tuple[str, ...], right: tuple[str, ...]) -> tuple[str, .
     if set(left) & set(right):
         return left + tuple(d for d in right if d not in left)
     raise ValueError(
-        f"frames {left} and {right} share no dimension; there is nothing to "
-        f"align them on"
+        f"frames {left} and {right} share no dimension; expand one operand over "
+        f"the dimensions of the other first"
     )
 
 
 class SparseArray:
     """Entries in canonical order, under a coordinate per dimension.
 
-    An entry that is not stored is not carried. What that means is stated by
-    `absence`: `"empty"` that the coordinate contributes nothing, `"unknown"`
-    that it was not modelled.
+    A coordinate without an entry is absent. `absence` declares its meaning:
+    `"empty"` means it contributes nothing, and `"unknown"` means it is not
+    modeled. The constructor sorts the entries and raises ValueError for a
+    repeated index.
     """
 
     def __init__(
@@ -77,7 +76,10 @@ class SparseArray:
         self.absence = absence
         missing = [d for d in self.dims if d not in coords]
         if missing:
-            raise ValueError(f"no coordinate for dimension(s) {missing}")
+            raise ValueError(
+                f"no coordinate for dimension(s) {missing}; pass a coordinate "
+                f"for each dimension"
+            )
         self.coords = {d: coords[d] for d in self.dims}
 
     @classmethod
@@ -89,12 +91,11 @@ class SparseArray:
         dims: Iterable[str],
         absence: str = "empty",
     ) -> "SparseArray":
-        """An array over buffers already in canonical order, taking no copy.
+        """Return an array over buffers in canonical order, without a copy.
 
-        The caller states that `index` is sorted by ravel key with no repeat;
-        `nimblend.is_canonical` answers that question where a caller cannot.
-        Verifying it here would cost the ravel this path exists to avoid, and
-        the array shares memory with the buffers it is handed.
+        `index` must ascend by raveled key with no repeat. `is_canonical`
+        checks this; this method does not. The array shares memory with
+        `index` and `data`.
         """
         self = cls.__new__(cls)
         self._set_frame(coords, dims, absence)
@@ -109,7 +110,7 @@ class SparseArray:
         labels: Mapping[str, npt.ArrayLike],
         absence: str = "empty",
     ) -> "SparseArray":
-        """Every cell of `values` as a stored entry."""
+        """Return an array with every cell of `values` as an entry."""
         values = np.asarray(values, dtype=np.float64)
         dims = tuple(labels)
         coords = {name: StoredCoord(labels[name]) for name in dims}
@@ -118,7 +119,7 @@ class SparseArray:
 
     @property
     def shape(self) -> tuple[int, ...]:
-        """Size of each dimension."""
+        """Return the extent of each dimension."""
         return tuple(len(self.coords[d]) for d in self.dims)
 
     def __repr__(self) -> str:
@@ -131,7 +132,7 @@ class SparseArray:
         )
 
     def _repr_html_(self) -> str:
-        """The head of the entries carried, as a table of labels."""
+        """Return the first entries as an HTML table of labels."""
         n = min(self.nnz, display.HEAD)
         columns = [
             display.as_text(self.coords[name].to_index(self.index[axis, :n]))
@@ -158,7 +159,7 @@ class SparseArray:
         return self.index[axes]
 
     def domain(self, dims: Iterable[str] | None = None) -> Domain:
-        """The distinct coordinates this array covers over `dims`."""
+        """Return the domain of the entries over `dims`."""
         dims = self.dims if dims is None else tuple(dims)
         axes = self._axes_of(dims)
         shape = tuple(self.shape[axis] for axis in axes)
@@ -167,22 +168,20 @@ class SparseArray:
         return Domain(kernel.distinct(keys), dims, coords, shape)
 
     def coordinates(self, dims: Iterable[str] | None = None) -> kernel.Index:
-        """Each entry's multi-index over `dims`, as a copy."""
+        """Return the multi-index of each entry over `dims`, as a copy."""
         dims = self.dims if dims is None else tuple(dims)
         return np.array(self._sub_index(self._axes_of(dims)), dtype=np.int32)
 
     def values(self) -> kernel.Values:
-        """The value each entry carries, as a copy, in canonical order.
+        """Return the value of each entry, as a copy, in canonical order.
 
-        The partner of `coordinates()`: together they answer the entries an
-        array holds without handing out the buffer it owns. A stored zero is
-        a value and is answered; an absent coordinate has no entry and no
-        value here.
+        The order matches `coordinates()`. A stored zero is a value. An absent
+        coordinate has no entry and no value.
         """
         return np.array(self.data, dtype=np.float64)
 
     def restrict(self, domain: Domain) -> "SparseArray":
-        """The entries whose coordinate over the domain's dimensions it carries."""
+        """Return the entries whose coordinate over `domain.dims` is in `domain`."""
         at = domain.positions_of(self)
         keep = at >= 0
         if bool(keep.all()):
@@ -192,20 +191,25 @@ class SparseArray:
         )
 
     def expand(self, dims: Iterable[str], coords: Mapping[str, Coord]) -> "SparseArray":
-        """Every entry replicated across the full extent of the named dimensions.
+        """Return every entry replicated across the full extent of `dims`.
 
-        The new dimensions are appended, which keeps the result canonical; a
-        different order is reached with `transpose`. Adding a dimension of
-        size `k` multiplies the entry count by `k`, so a caller states the
-        replication rather than an operator implying it.
+        The new dimensions are appended; `transpose` reorders them. A dimension
+        of extent `k` multiplies the entry count by `k`. Raises ValueError for
+        a dimension the array already has or one without a coordinate.
         """
         dims = tuple(dims)
         clash = [name for name in dims if name in self.dims]
         if clash:
-            raise ValueError(f"dimension(s) {clash} are already carried")
+            raise ValueError(
+                f"the array already has dimension(s) {clash}; pass dimensions "
+                f"it does not have"
+            )
         missing = [name for name in dims if name not in coords]
         if missing:
-            raise ValueError(f"no coordinate for dimension(s) {missing}")
+            raise ValueError(
+                f"no coordinate for dimension(s) {missing}; pass a coordinate "
+                f"for each dimension"
+            )
         sizes = [len(coords[name]) for name in dims]
         total = 1
         for size in sizes:
@@ -226,17 +230,15 @@ class SparseArray:
 
     @property
     def nnz(self) -> int:
-        """Number of entries carried."""
+        """Return the number of entries."""
         return int(self.data.size)
 
     def to_dense(self, fill: float | None = None) -> npt.NDArray[np.float64]:
-        """A dense array with absent coordinates carrying `fill`.
+        """Return a numpy array with `fill` at each absent coordinate.
 
-        An array declaring absence `"empty"` densifies to zero where it
-        carries no entry, because that is what the coordinate contributes.
-        One declaring `"unknown"` has no value to place there and states
-        `fill`, unless it carries every coordinate of its frame and there is
-        nowhere to place one.
+        Without `fill`, an absent coordinate is 0.0 under absence "empty".
+        Under absence "unknown", an absent coordinate without `fill` raises
+        ValueError.
         """
         if self.absence == "unknown" and fill is None:
             total = 1
@@ -244,26 +246,36 @@ class SparseArray:
                 total *= size
             if self.nnz < total:
                 raise ValueError(
-                    "this array declares absence 'unknown' and does not carry "
-                    "every coordinate of its frame, so densifying must state "
-                    "fill=<value> to place at the rest"
+                    f"absence is 'unknown' and the array has no value at "
+                    f"{total - self.nnz} of {total} coordinates; pass "
+                    f"fill=<value> to to_dense()"
                 )
         return self._filled(0.0 if fill is None else fill)
 
     def rename(self, names: Mapping[str, str]) -> "SparseArray":
-        """The array with dimensions renamed."""
+        """Return the array with its dimensions renamed.
+
+        Raises ValueError when two dimensions map to one name.
+        """
         dims = tuple(names.get(d, d) for d in self.dims)
         if len(set(dims)) != len(dims):
-            raise ValueError(f"rename maps two dimensions onto one name: {dims}")
+            raise ValueError(
+                f"rename maps two dimensions onto one name in {dims}; map each "
+                f"dimension to a distinct name"
+            )
         coords = {names.get(d, d): self.coords[d] for d in self.dims}
         return SparseArray(self.index, self.data, coords, dims, self.absence)
 
     def transpose(self, *dims: str) -> "SparseArray":
-        """The array with its dimensions in the given order."""
+        """Return the array with its dimensions in the given order.
+
+        Without arguments the order is reversed. Raises ValueError unless
+        `dims` contains every dimension of the array.
+        """
         dims = tuple(reversed(self.dims)) if not dims else tuple(dims)
         if set(dims) != set(self.dims):
             raise ValueError(
-                f"transpose needs every dimension of {self.dims}; got {dims}"
+                f"transpose requires every dimension of {self.dims}; got {dims}"
             )
         order = [self.dims.index(d) for d in dims]
         return SparseArray(
@@ -271,7 +283,10 @@ class SparseArray:
         )
 
     def sel(self, indexers: Mapping[str, Any]) -> "SparseArray":
-        """Entries at the given labels, dropping each dimension named once."""
+        """Return the entries at the given labels, without the selected dimensions.
+
+        Raises KeyError for a label the coordinate does not contain.
+        """
         index, data = self.index, self.data
         dims = list(self.dims)
         coords = dict(self.coords)
@@ -286,30 +301,35 @@ class SparseArray:
         return SparseArray(index, data, coords, tuple(dims), self.absence)
 
     def as_empty(self) -> "SparseArray":
-        """The array declaring that an absent coordinate contributes nothing."""
+        """Return this array with absence "empty".
+
+        An absent coordinate then contributes nothing.
+        """
         return SparseArray(self.index, self.data, self.coords, self.dims, "empty")
 
     def as_unknown(self) -> "SparseArray":
-        """The array declaring that an absent coordinate was not modelled."""
+        """Return this array with absence "unknown".
+
+        An absent coordinate is then not modeled.
+        """
         return SparseArray(self.index, self.data, self.coords, self.dims, "unknown")
 
     def _conform(self, other: "SparseArray") -> tuple["SparseArray", "SparseArray"]:
-        """Both operands over the frame their dimensions combine to.
+        """Return both operands over the frame from `combined_dims`.
 
-        An operand missing a dimension of that frame gains one entry per
-        coordinate of it, which is the replication a wider result carries.
+        An operand without a dimension of that frame is replicated across it.
+        Raises ValueError for operands with different absence.
         """
         dims = combined_dims(self.dims, other.dims)
         if self.absence != other.absence:
             raise ValueError(
                 f"one array declares absence {self.absence!r} and the other "
-                f"{other.absence!r}; state which the result carries with "
-                f"as_empty() or as_unknown()"
+                f"{other.absence!r}; convert one with as_empty() or as_unknown()"
             )
         return self._widen(dims, other), other._widen(dims, self)
 
     def _widen(self, dims: tuple[str, ...], other: "SparseArray") -> "SparseArray":
-        """This array over `dims`, taking any missing coordinate from `other`."""
+        """Return this array over `dims`, expanded by the dimensions of `other`."""
         missing = tuple(d for d in dims if d not in self.dims)
         if not missing:
             return self if self.dims == dims else self.transpose(*dims)
@@ -325,15 +345,13 @@ class SparseArray:
         differing = [d for d in self.dims if self.coords[d] != other.coords[d]]
         if differing:
             raise ValueError(
-                f"dimension(s) {differing} carry different labels in the two "
-                f"arrays; an entry is aligned by its label, so conform one to "
-                f"the other first"
+                f"dimension(s) {differing} have different labels in the two "
+                f"arrays; conform one to the other first"
             )
         if self.absence != other.absence:
             raise ValueError(
                 f"one array declares absence {self.absence!r} and the other "
-                f"{other.absence!r}; state which the result carries with "
-                f"as_empty() or as_unknown()"
+                f"{other.absence!r}; convert one with as_empty() or as_unknown()"
             )
 
     def _scalar(self, value: Scalar, op: Binary) -> "SparseArray":
@@ -403,39 +421,37 @@ class SparseArray:
         return combined_dims(self.dims, other.dims)
 
     def _broadcast_mul(self, other: "SparseArray") -> "SparseArray":
-        """The product of two arrays whose dimensions nest, over the wider frame.
+        """Return the product of two arrays with nested frames, over the wider.
 
-        The operand carrying fewer dimensions supplies a factor for every entry
-        of the wider one sharing its coordinate. An entry whose shared
-        coordinate the narrower operand does not carry has no factor and does
-        not survive, which is intersection extended over the extra dimensions.
+        An entry of the wider operand is dropped where the narrower operand has
+        no entry at its shared coordinate.
         """
         narrow, wide = (self, other)
         if len(narrow.dims) > len(wide.dims):
             narrow, wide = wide, narrow
         if not set(narrow.dims) <= set(wide.dims):
             raise ValueError(
-                f"dimensions {narrow.dims} are not a subset of {wide.dims}; a "
-                f"broadcast product needs one frame to nest inside the other"
+                f"dimensions {narrow.dims} are not a subset of {wide.dims}; pass "
+                f"operands whose frames nest"
             )
         if narrow.absence != wide.absence:
             raise ValueError(
                 f"one array declares absence {narrow.absence!r} and the other "
-                f"{wide.absence!r}; state which the result carries with "
-                f"as_empty() or as_unknown()"
+                f"{wide.absence!r}; convert one with as_empty() or as_unknown()"
             )
         axes = [wide.dims.index(d) for d in narrow.dims]
         shared_shape = tuple(wide.shape[a] for a in axes)
         if shared_shape != narrow.shape:
             raise ValueError(
                 f"shared dimensions {narrow.dims} have size {narrow.shape} in "
-                f"one operand and {shared_shape} in the other"
+                f"one operand and {shared_shape} in the other; conform one to "
+                f"the other first"
             )
         differing = [d for d in narrow.dims if wide.coords[d] != narrow.coords[d]]
         if differing:
             raise ValueError(
-                f"shared dimension(s) {differing} carry different labels in "
-                f"the two operands; an entry is aligned by its label"
+                f"shared dimension(s) {differing} have different labels in the "
+                f"two operands; conform one to the other first"
             )
         probe = kernel.ravel(wide.index[axes], shared_shape)
         take = kernel.lookup(kernel.ravel(narrow.index, narrow.shape), probe)
@@ -447,28 +463,25 @@ class SparseArray:
         )
 
     def _overlap_mul(self, other: "SparseArray") -> "SparseArray":
-        """The product of two arrays whose frames share some dimensions.
+        """Return the product of two arrays whose frames share some dimensions.
 
-        The shared dimensions align and the rest multiply out, so an entry of
-        the result pairs one entry of each operand agreeing on the shared
-        coordinate. The result carries this array's dimensions followed by
-        the dimensions only the other carries. An entry whose shared
-        coordinate the other operand does not carry has no factor and does
-        not survive.
+        Each result entry pairs one entry of each operand with the same shared
+        coordinate. The result is over the dimensions of this array, then those
+        only `other` has. An entry with no pair in the other operand is
+        dropped.
         """
         if self.absence != other.absence:
             raise ValueError(
                 f"one array declares absence {self.absence!r} and the other "
-                f"{other.absence!r}; state which the result carries with "
-                f"as_empty() or as_unknown()"
+                f"{other.absence!r}; convert one with as_empty() or as_unknown()"
             )
         shared = tuple(d for d in self.dims if d in other.dims)
         extra = tuple(d for d in other.dims if d not in self.dims)
         differing = [d for d in shared if self.coords[d] != other.coords[d]]
         if differing:
             raise ValueError(
-                f"shared dimension(s) {differing} carry different labels in "
-                f"the two operands; an entry is aligned by its label"
+                f"shared dimension(s) {differing} have different labels in the "
+                f"two operands; conform one to the other first"
             )
         mine = [self.dims.index(d) for d in shared]
         theirs = [other.dims.index(d) for d in shared]
@@ -503,13 +516,11 @@ class SparseArray:
         return self.__mul__(other)
 
     def __truediv__(self, other: "Operand | DenseArray") -> "SparseArray":
-        """The quotient over the coordinates both operands carry.
+        """Return the quotient of this array by `other`.
 
-        A stored zero is a value the array carries, so dividing by one
-        answers what the arithmetic answers: infinity, or nan where the
-        numerator is zero too. An absent denominator is not a value and has
-        nothing to divide by, so it raises. A caller that refuses a
-        non-finite result states that rule itself.
+        A stored zero in the denominator gives infinity, or NaN over a zero
+        numerator. Raises ValueError where the numerator has an entry and the
+        denominator is absent.
         """
         if isinstance(other, (int, float, np.number)):
             with np.errstate(divide="ignore", invalid="ignore"):
@@ -528,46 +539,45 @@ class SparseArray:
         if merged.size < keys_a.size:
             raise ValueError(
                 f"the denominator is absent at {keys_a.size - merged.size} "
-                f"coordinate(s) the numerator carries; a quotient there is not "
-                f"zero and not one, so it is refused"
+                f"coordinate(s) where the numerator has a value; restrict the "
+                f"numerator to the domain of the denominator"
             )
         with np.errstate(divide="ignore", invalid="ignore"):
             return self._assemble(other, np.divide, merged, take_a, take_b)
 
     def _broadcast_div(self, other: "SparseArray") -> "SparseArray":
-        """The quotient of this array by one whose dimensions it carries.
+        """Return the quotient by an array over a subset of these dimensions.
 
-        Each entry reads the denominator at its own coordinate over the
-        shared dimensions, so the result carries this array's entries and the
-        denominator is never replicated across the wider frame.
+        Each entry is divided by the denominator at its coordinate over the
+        shared dimensions. The denominator is not replicated.
         """
         if self.absence != other.absence:
             raise ValueError(
                 f"one array declares absence {self.absence!r} and the other "
-                f"{other.absence!r}; state which the result carries with "
-                f"as_empty() or as_unknown()"
+                f"{other.absence!r}; convert one with as_empty() or as_unknown()"
             )
         axes = self._axes_of(other.dims)
         shared_shape = tuple(self.shape[axis] for axis in axes)
         if shared_shape != other.shape:
             raise ValueError(
                 f"shared dimensions {other.dims} have size {other.shape} in "
-                f"one operand and {shared_shape} in the other"
+                f"one operand and {shared_shape} in the other; conform one to "
+                f"the other first"
             )
         differing = [d for d in other.dims if self.coords[d] != other.coords[d]]
         if differing:
             raise ValueError(
-                f"shared dimension(s) {differing} carry different labels in "
-                f"the two operands; an entry is aligned by its label"
+                f"shared dimension(s) {differing} have different labels in the "
+                f"two operands; conform one to the other first"
             )
         probe = kernel.ravel(self.index[axes], shared_shape)
         take = kernel.lookup(kernel.ravel(other.index, other.shape), probe)
         absent = int((take < 0).sum())
         if absent:
             raise ValueError(
-                f"the denominator is absent at {absent} coordinate(s) the "
-                f"numerator carries; a quotient there is not zero and not "
-                f"one, so it is refused"
+                f"the denominator is absent at {absent} coordinate(s) where the "
+                f"numerator has a value; restrict the numerator to the domain "
+                f"of the denominator"
             )
         with np.errstate(divide="ignore", invalid="ignore"):
             data = self.data / other.data[take]
@@ -576,10 +586,9 @@ class SparseArray:
         )
 
     def __rtruediv__(self, other: Scalar) -> "SparseArray":
-        """A number divided by every entry this array carries.
+        """Return a number divided by each entry.
 
-        A stored zero divides to infinity, which is what the arithmetic
-        answers; an absent coordinate has no entry and stays absent.
+        A stored zero gives infinity. An absent coordinate stays absent.
         """
         if not isinstance(other, (int, float, np.number)):
             return NotImplemented
@@ -590,10 +599,9 @@ class SparseArray:
         return self._scalar(0.0, lambda a, _: -a)
 
     def __pow__(self, other: Scalar) -> "SparseArray":
-        """Every entry raised to a number.
+        """Return each entry raised to a number.
 
-        An absent coordinate stays absent, as it does under a scalar product:
-        it carries no value to raise.
+        An absent coordinate stays absent.
         """
         if not isinstance(other, (int, float, np.number)):
             return NotImplemented
@@ -602,24 +610,20 @@ class SparseArray:
 
     def _policy(self, skip: bool | None, fill: float | None) -> None:
         if skip is not None and skip is not True:
-            raise ValueError(
-                f"skip states that the entries present are the whole of the "
-                f"reduction and is True; got {skip!r}"
-            )
+            raise ValueError(f"skip is True or None; got {skip!r}")
         if skip is not None and fill is not None:
-            raise ValueError("state skip= or fill=, not both")
+            raise ValueError("skip= and fill= are given together; pass one of them")
         if self.absence == "unknown" and skip is None and fill is None:
             raise ValueError(
-                "this array declares absence 'unknown', so a reduction must "
-                "state skip=True to use present entries only, or fill=<value> "
-                "to count absences as that value"
+                "absence is 'unknown' and no reduction policy is given; pass "
+                "skip=True to reduce the present entries, or fill=<value> to "
+                "include the absent coordinates"
             )
 
     def _filled(self, value: float) -> npt.NDArray[np.float64]:
-        """Every cell of the frame, with absent coordinates carrying `value`.
+        """Return every cell of the frame, with `value` at each absent coordinate.
 
-        A frame over no dimensions is a single cell, which the one entry an
-        array can carry there fills whole.
+        A frame over no dimensions is a single cell.
         """
         out = np.full(self.shape, value, dtype=np.float64)
         if not self.nnz:
@@ -667,11 +671,11 @@ class SparseArray:
         skip: bool | None = None,
         fill: float | None = None,
     ) -> "SparseArray | float":
-        """Total over `dim`, or over the whole array when `dim` is None.
+        """Return the sum over `dim`, or over the whole array when `dim` is None.
 
-        With `fill` every coordinate of the frame counts, carrying that
-        value where the array holds no entry; with `skip` only the
-        entries held count.
+        With `fill` each absent coordinate counts as `fill`. With `skip=True`
+        only the entries count. Raises ValueError when both are given, or when
+        neither is given under absence "unknown".
         """
         return self._reduce(dim, "sum", skip, fill)
 
@@ -681,11 +685,11 @@ class SparseArray:
         skip: bool | None = None,
         fill: float | None = None,
     ) -> "SparseArray | float":
-        """Mean over `dim`, or over the whole array when `dim` is None.
+        """Return the mean over `dim`, or over the whole array when `dim` is None.
 
-        With `fill` every coordinate of the frame counts, carrying that
-        value where the array holds no entry; with `skip` only the
-        entries held count.
+        With `fill` each absent coordinate counts as `fill`. With `skip=True`
+        only the entries count. Raises ValueError when both are given, or when
+        neither is given under absence "unknown".
         """
         return self._reduce(dim, "mean", skip, fill)
 
@@ -695,11 +699,11 @@ class SparseArray:
         skip: bool | None = None,
         fill: float | None = None,
     ) -> "SparseArray | float":
-        """Minimum over `dim`, or over the whole array when `dim` is None.
+        """Return the minimum over `dim`, or over the whole array when `dim` is None.
 
-        With `fill` every coordinate of the frame counts, carrying that
-        value where the array holds no entry; with `skip` only the
-        entries held count.
+        With `fill` each absent coordinate counts as `fill`. With `skip=True`
+        only the entries count. Raises ValueError when both are given, or when
+        neither is given under absence "unknown".
         """
         return self._reduce(dim, "min", skip, fill)
 
@@ -709,16 +713,20 @@ class SparseArray:
         skip: bool | None = None,
         fill: float | None = None,
     ) -> "SparseArray | float":
-        """Maximum over `dim`, or over the whole array when `dim` is None.
+        """Return the maximum over `dim`, or over the whole array when `dim` is None.
 
-        With `fill` every coordinate of the frame counts, carrying that
-        value where the array holds no entry; with `skip` only the
-        entries held count.
+        With `fill` each absent coordinate counts as `fill`. With `skip=True`
+        only the entries count. Raises ValueError when both are given, or when
+        neither is given under absence "unknown".
         """
         return self._reduce(dim, "max", skip, fill)
 
     def shift(self, shifts: Mapping[str, int], mode: str = "drop") -> "SparseArray":
-        """Entries moved along each named dimension."""
+        """Return the entries moved along each dimension in `shifts`.
+
+        `mode` is "drop" or "wrap". Under "drop" an entry moved outside the
+        frame is removed.
+        """
         index, data = self.index, self.data
         for name, amount in shifts.items():
             axis = self.dims.index(name)
@@ -728,7 +736,7 @@ class SparseArray:
         return SparseArray(index, data, self.coords, self.dims, self.absence)
 
     def roll(self, shifts: Mapping[str, int]) -> "SparseArray":
-        """Entries moved along each named dimension, wrapping at the ends."""
+        """Return the entries shifted along each dimension, wrapping at the ends."""
         return self.shift(shifts, mode="wrap")
 
     def group(
@@ -739,37 +747,32 @@ class SparseArray:
         offset: int = 0,
         out: kernel.Block | None = None,
     ) -> "SparseArray":
-        """`dims` collapsed into one dimension numbered by a domain.
+        """Return `dims` collapsed into one dimension `into`, numbered by a domain.
 
-        A member's position in the domain, plus `offset`, is its index along
-        `into`. The grouped dimensions must be a leading prefix of the
-        canonical order, which is what makes the result canonical as written:
-        their positions ascend with the coordinate and the remaining
-        dimensions ascend within each group. An entry whose coordinate the
-        domain does not carry is not emitted.
-
-        A non-zero `offset` numbers the result into an extent wider than its
-        own members span, which is what lets several results share one
-        destination buffer and one numbering. Such a result is a fragment of
-        that extent: reading it as a standalone array is what `to_csr`
-        refuses.
+        An entry is placed along `into` at the position of its member in
+        `domain` plus `offset`. `dims` must be a leading prefix of the
+        dimensions. `domain` defaults to the domain of the entries over `dims`.
+        Entries outside `domain` are dropped. With `out` the entries are written
+        into `out`. Raises ValueError for a negative `offset`, for `dims` that
+        are not a leading prefix, and for an `into` among the other dimensions.
         """
         dims = tuple(dims)
         offset = int(offset)
         if offset < 0:
             raise ValueError(
-                f"offset {offset} numbers the first member below zero; a "
-                f"position along {into!r} is not negative"
+                f"offset {offset} is negative; pass an offset of 0 or more"
             )
         axes = self._axes_of(dims)
         if axes != list(range(len(dims))):
             raise ValueError(
-                f"dimensions {dims} sit at axes {axes} of {self.dims}; "
-                f"grouping reads a leading prefix of the canonical order"
+                f"dimensions {dims} are at axes {axes} of {self.dims}, not a "
+                f"leading prefix; transpose the array to put them first"
             )
         rest = self.dims[len(dims) :]
         if into in rest:
-            raise ValueError(f"dimension {into!r} is already carried")
+            raise ValueError(
+                f"the result already has dimension {into!r}; pass another name as into"
+            )
         if domain is None:
             domain = self.domain(dims)
         at = domain.positions_of(self)
@@ -791,23 +794,21 @@ class SparseArray:
         )
 
     def to_csr(self) -> tuple[kernel.Index, kernel.Values, kernel.Index]:
-        """The array as CSR triplets `(indices, values, indptr)`.
+        """Return the array as CSR triplets `(indices, values, indptr)`.
 
-        Canonical order is sorted by row and then column, which is CSR's own
-        requirement, so the column indices and values are views and only the
-        row pointer is built.
+        The column indices and the values are views of the entry buffers. Only
+        the row pointer is computed. Raises ValueError for an array without two
+        dimensions, and for row positions outside the extent of the first.
         """
         if len(self.dims) != 2:
-            raise ValueError(
-                f"CSR is a two-dimensional form; this array has dimensions {self.dims}"
-            )
+            raise ValueError(f"to_csr requires two dimensions; got {self.dims}")
         rows = self.shape[0]
         if self.nnz and (self.index[0, 0] < 0 or self.index[0, -1] >= rows):
             raise ValueError(
-                f"rows run from {int(self.index[0, 0])} to "
-                f"{int(self.index[0, -1])} and dimension {self.dims[0]!r} "
-                f"spans {rows}; a row pointer over that extent would not "
-                f"reach these entries"
+                f"row positions range from {int(self.index[0, 0])} to "
+                f"{int(self.index[0, -1])} and dimension {self.dims[0]!r} has "
+                f"extent {rows}; pass an array with row positions from 0 to "
+                f"{rows - 1}"
             )
         return kernel.to_csr(self.index, self.data, self.shape)
 
@@ -817,17 +818,17 @@ class SparseArray:
         at = kernel.first_repeat(positions)
         if at >= 0:
             raise ValueError(
-                f"label {labels[at]!r} is named twice for dimension {name!r}; "
-                f"conform reads each position of a dimension once"
+                f"label {python_value(labels[at])!r} appears twice for dimension "
+                f"{name!r}; pass each label once"
             )
 
     def conform(
         self, dims: Iterable[str], labels: Mapping[str, npt.ArrayLike]
     ) -> "SparseArray":
-        """The array read at exactly `labels`, laid out over `dims`.
+        """Return the array read at exactly `labels`, over `dims` in that order.
 
-        Each label is named once: a repeat would ask one position to occupy
-        two, and `gather` renumbers a position to a single destination.
+        Raises KeyError for a label the coordinate does not contain. Raises
+        ValueError for a label given twice.
         """
         index, data = self.index, self.data
         coords = {}

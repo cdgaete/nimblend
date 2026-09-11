@@ -99,7 +99,7 @@ def test_from_long_refuses_a_dimension_carrying_no_label_column():
 
 
 def test_from_long_refuses_a_label_the_coordinate_does_not_carry():
-    with pytest.raises(KeyError, match="is not carried"):
+    with pytest.raises(KeyError, match="is not in the coordinate"):
         nb.from_long(
             ("t",),
             {"t": nb.StoredCoord(np.array([2030, 2040]))},

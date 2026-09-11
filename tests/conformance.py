@@ -86,14 +86,14 @@ def check_array_contract(make):
         arr.shift({"x": 1}, mode="sideways")
 
     # a repeated label would ask one position to occupy two
-    with pytest.raises(ValueError, match="is named twice for dimension"):
+    with pytest.raises(ValueError, match="appears twice for dimension"):
         arr.conform(["x", "y"], {"x": np.array(["a", "a"]), "y": labels["y"]})
 
     with pytest.raises(ValueError, match="leading prefix"):
         arr.group(("y",), into="g")
-    with pytest.raises(ValueError, match="already carried"):
+    with pytest.raises(ValueError, match="already has"):
         arr.group(("x",), into="y")
-    with pytest.raises(ValueError, match="not negative"):
+    with pytest.raises(ValueError, match="is negative"):
         arr.group(("x",), into="g", offset=-1)
 
     check_frame_contract(arr)

@@ -1,7 +1,7 @@
-"""Index and value operations over plain buffers.
+"""Index and value operations over plain numpy buffers.
 
-Every function takes and returns numpy arrays and knows nothing of labels or
-dimensions. The signatures are the seam a compiled implementation replaces.
+Every function takes and returns numpy arrays, without labels or dimension
+names. A compiled module with the same signatures can replace this module.
 """
 
 from collections.abc import Sequence
@@ -19,13 +19,10 @@ _INT64_MAX = 2**63 - 1
 
 
 def ravel(idx: Index | Sequence[Index], shape: Sequence[int]) -> Keys:
-    """`idx` as one int64 key per entry, in C order.
+    """Return one int64 key per entry of `idx`, in C order.
 
-    A single key is what lets a sort over several dimensions be one argsort
-    rather than a lexsort.
-
-    Over no dimensions the product of the sizes is one, so every entry lands
-    on the single coordinate that product holds.
+    Over no dimensions every key is 0. Raises OverflowError when the product
+    of `shape` exceeds the int64 range.
     """
     if not len(shape):
         return np.zeros(np.shape(idx)[1], dtype=np.int64)
@@ -34,8 +31,8 @@ def ravel(idx: Index | Sequence[Index], shape: Sequence[int]) -> Keys:
         total *= int(size)
         if total > _INT64_MAX:
             raise OverflowError(
-                f"shape {tuple(shape)} exceeds the int64 range a ravelled "
-                f"index key holds"
+                f"shape {tuple(shape)} exceeds the int64 range of a raveled "
+                f"index key; reduce the number or the extent of the dimensions"
             )
     keys = idx[0].astype(np.int64)
     for axis in range(1, len(shape)):
@@ -45,7 +42,7 @@ def ravel(idx: Index | Sequence[Index], shape: Sequence[int]) -> Keys:
 
 
 def unravel(keys: Positions, shape: Sequence[int]) -> Index:
-    """The `(ndim, n)` index matrix a set of C-order keys stands for."""
+    """Return the `(ndim, n)` index matrix of a set of C-order keys."""
     out = np.empty((len(shape), keys.size), dtype=np.int32)
     rest = keys
     for axis in range(len(shape) - 1, -1, -1):
@@ -56,11 +53,9 @@ def unravel(keys: Positions, shape: Sequence[int]) -> Index:
 
 
 def distinct(keys: Keys) -> Keys:
-    """Sorted unique keys, read off in one pass where they already ascend.
+    """Return the sorted unique keys, in one pass when the keys do not descend.
 
-    Keys ravelled from a canonical block over a leading prefix of its
-    dimensions arrive in order and the repeats a shared coordinate leaves
-    are adjacent, so neither a sort nor a hash is needed to answer them.
+    Keys that strictly ascend are returned as given, without a copy.
     """
     if keys.size < 2:
         return keys
@@ -76,10 +71,10 @@ def distinct(keys: Keys) -> Keys:
 
 
 def first_repeat(keys: Positions) -> int:
-    """The position of the second key to repeat a value, or -1 when distinct.
+    """Return the position of a repeated key, or -1 when the keys are distinct.
 
-    A stable argsort brings equal keys together, so the earliest repeat in
-    sorted order is the earliest a caller has to name.
+    The position is that of the second occurrence of the smallest repeated
+    key.
     """
     if keys.size < 2:
         return -1
@@ -90,7 +85,7 @@ def first_repeat(keys: Positions) -> int:
 
 
 def _emit(idx: Index, data: Values, out: Block | None) -> Block:
-    """`idx` and `data` in `out`'s leading positions, or unchanged without one."""
+    """Return `idx` and `data` copied into the start of `out`, or as given."""
     if out is None:
         return idx, data
     n = data.size
@@ -107,16 +102,12 @@ def canonicalize(
     on_duplicate: str = "sum",
     out: Block | None = None,
 ) -> Block:
-    """`idx` and `data` sorted by index with no repeated entry.
+    """Return `idx` and `data` sorted by index, with no repeated entry.
 
-    Sorting on the ravelled key is one argsort rather than a lexsort over
-    every dimension. What that sort costs is not the ordering but applying
-    it: permuting the index and the data gathers them at random, so a block
-    whose keys already ascend is copied straight through. Entries carrying
-    zero are kept: a stored zero states that a coordinate is present.
-
-    The result never shares memory with what it was given;
-    `SparseArray.from_canonical` is the door that does.
+    `on_duplicate` is "sum" or "raise". At a repeated entry, "sum" adds the
+    values, and "raise" or another value raises ValueError. Entries with value
+    zero are kept. With `out` the result is written into `out`. The result
+    does not share memory with a non-empty input.
     """
     if data.size == 0:
         return _emit(idx, data, out)
@@ -139,8 +130,8 @@ def canonicalize(
     if on_duplicate == "raise":
         at = int(np.flatnonzero(~first)[0])
         raise ValueError(
-            f"index {tuple(int(v) for v in idx[:, at])} repeats; a coordinate "
-            f"names one entry"
+            f"index {tuple(int(v) for v in idx[:, at])} is repeated; pass each "
+            f"coordinate once"
         )
     if on_duplicate != "sum":
         raise ValueError(f"on_duplicate is 'sum' or 'raise'; got {on_duplicate!r}")
@@ -150,11 +141,11 @@ def canonicalize(
 
 
 def align(keys_a: Keys, keys_b: Keys, how: str) -> tuple[Keys, Positions, Positions]:
-    """Merge two sorted unique key sets, with each operand's take-vector.
+    """Merge two sorted unique key sets and return each operand's take-vector.
 
-    `take_a[i]` is the position in `keys_a` supplying merged entry `i`, or
-    -1 where `keys_a` does not carry it. A binary search over sorted keys is
-    what makes this a merge rather than a hash join.
+    `how` is "union" or "intersect". `take_a[i]` is the position of merged
+    key `i` in `keys_a`, or -1 where `keys_a` does not contain it. `take_b`
+    is the same for `keys_b`. Raises ValueError for another `how`.
     """
     if how == "intersect":
         if keys_a.size == 0 or keys_b.size == 0:
@@ -202,10 +193,10 @@ def gather(
     axis_len: int,
     out: Block | None = None,
 ) -> Block:
-    """Entries whose position along `axis` is in `take`, renumbered to it.
+    """Return the entries whose position along `axis` is in `take`, renumbered.
 
-    Positions absent from `take` are dropped. `take` names each position at
-    most once, so the result carries no repeated coordinate.
+    An entry at position `take[i]` moves to position `i`. Entries at other
+    positions are dropped. `take` must contain each position at most once.
     """
     lookup = np.full(axis_len, -1, dtype=np.int32)
     lookup[take] = np.arange(len(take), dtype=np.int32)
@@ -235,18 +226,12 @@ def reduce_axis(
     op: str = "sum",
     out: Block | None = None,
 ) -> Block:
-    """`axis` removed, entries sharing the remaining coordinate combined.
+    """Return the entries without `axis`, combining those at the same coordinate.
 
-    Entries that carried distinct positions on the other axes do not meet,
-    so such a reduction leaves the entry count unchanged and only drops the
-    axis. Where no two entries meet the reduction is the identity on the kept
-    axes, and the entries are copied across with no sort at all. Reducing the
-    last axis leaves no axis to sort on: the product of no sizes is one, so
-    every entry meets on the single coordinate it holds and the result is one
-    entry. With `out`
-    the result is written into it directly and the block never exists as a
-    second object; the working set that remains is the sort-merge, which
-    scales with the input.
+    `op` is "sum", "min" or "max". Entries whose remaining coordinates already
+    ascend are copied without a sort. Removing the only axis of a non-empty
+    block returns one entry. With `out` the result is written into `out`.
+    Raises ValueError for another `op`.
     """
     reducer = _REDUCERS.get(op)
     if reducer is None:
@@ -305,11 +290,11 @@ def shift_axis(
     mode: str = "drop",
     out: Block | None = None,
 ) -> Block:
-    """Each entry moved `n` positions along `axis`.
+    """Return each entry moved `n` positions along `axis`.
 
-    Under `drop` an entry whose reference falls outside the axis is removed
-    rather than replaced by a zero, so a position no entry reaches is absent.
-    Under `wrap` the axis is cyclic and every entry survives.
+    Under mode "drop" an entry moved outside the axis is removed. Under mode
+    "wrap" the axis is cyclic and every entry is kept. Raises ValueError for
+    another mode.
     """
     if mode not in ("drop", "wrap"):
         raise ValueError(f"mode is 'drop' or 'wrap'; got {mode!r}")
@@ -336,11 +321,10 @@ def shift_axis(
 def to_csr(
     idx: Index, data: Values, shape: Sequence[int]
 ) -> tuple[Index, Values, Index]:
-    """A canonical two-dimensional block as CSR triplets.
+    """Return a canonical two-dimensional block as CSR triplets.
 
-    Canonical order is sorted by row and then column, which is CSR's own
-    requirement, so the column indices and values are returned as views and
-    only the row pointer is built.
+    The column indices and the values are views of `idx` and `data`. Only the
+    row pointer is computed.
     """
     rows = np.arange(shape[0] + 1, dtype=np.int32)
     indptr = np.searchsorted(idx[0], rows).astype(np.int32)
@@ -348,7 +332,7 @@ def to_csr(
 
 
 def is_canonical(idx: Index, shape: Sequence[int]) -> bool:
-    """Whether `idx` is sorted ascending by ravel key with no repeated key."""
+    """Return True when `idx` ascends by raveled key with no repeated key."""
     if idx.shape[1] < 2:
         return True
     keys = ravel(idx, shape)
@@ -356,11 +340,9 @@ def is_canonical(idx: Index, shape: Sequence[int]) -> bool:
 
 
 def lookup(keys: Keys, probe: Positions) -> Positions:
-    """Each entry of `probe` as its position in sorted-unique `keys`, or -1.
+    """Return the position of each entry of `probe` in `keys`, or -1 if absent.
 
-    `probe` may repeat and need not be sorted, which is what lets an operand
-    carrying several entries per shared coordinate resolve against one that
-    carries a single entry for it.
+    `keys` must be sorted and unique. `probe` may repeat and may be unsorted.
     """
     if keys.size == 0:
         return np.full(probe.size, -1, dtype=np.int64)

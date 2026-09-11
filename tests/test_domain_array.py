@@ -38,7 +38,7 @@ def test_the_array_carries_the_domains_own_coordinates():
 
 
 def test_a_value_column_of_another_length_is_refused():
-    with pytest.raises(ValueError, match="length"):
+    with pytest.raises(ValueError, match="requires values of shape"):
         domain([0, 2, 4]).array(np.array([5.0, 6.0]))
 
 
@@ -88,12 +88,12 @@ def test_the_identity_numbers_from_zero_by_default():
 
 
 def test_a_destination_too_short_for_the_members_is_refused():
-    with pytest.raises(ValueError, match="spans"):
+    with pytest.raises(ValueError, match="has extent 6"):
         domain([0, 2, 4]).identity("k", ProductCoord((6,)), start=4)
 
 
 def test_a_dimension_the_domain_already_carries_is_refused():
-    with pytest.raises(ValueError, match="already carried"):
+    with pytest.raises(ValueError, match="already has"):
         domain([0, 2]).identity("x", ProductCoord((10,)))
 
 

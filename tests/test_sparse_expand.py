@@ -51,7 +51,7 @@ def test_expand_adds_several_dimensions_at_once():
 
 def test_expand_refuses_a_dimension_the_array_already_carries():
     arr = block([[5.0]], {"x": np.array(["a"]), "y": np.array([0])})
-    with pytest.raises(ValueError, match="already carried"):
+    with pytest.raises(ValueError, match="already has"):
         arr.expand(("x",), {"x": StoredCoord(np.array(["a"]))})
 
 

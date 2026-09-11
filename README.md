@@ -121,8 +121,8 @@ And two arrays whose labels genuinely disagree are refused rather than guessed a
 
 ```python
 a + c
-# ValueError: dimension(s) ['region'] carry different labels in the two arrays;
-# an entry is aligned by its label, so conform one to the other first
+# ValueError: dimension(s) ['region'] have different labels in the two arrays;
+# conform one to the other first
 ```
 
 **What it buys.** The frame of a result follows from the dimension names alone, so an operand may be transposed, narrower than the other, or only partly overlapping it, and nothing is lined up by hand. Where the labels cannot be reconciled the operation stops instead of returning a plausible number.
@@ -197,9 +197,9 @@ Under `"unknown"` the operations that would have to invent a value say so instea
 
 ```python
 de.as_unknown().sum()
-# ValueError: this array declares absence 'unknown', so a reduction must state
-# skip=True to use present entries only, or fill=<value> to count absences as
-# that value
+# ValueError: absence is 'unknown' and no reduction policy is given; pass
+# skip=True to reduce the present entries, or fill=<value> to include the absent
+# coordinates
 ```
 
 A stored `0.0` is distinct from an absent coordinate under both declarations: it is a coordinate that is present and worth nothing.
@@ -272,8 +272,8 @@ The frame a binary result carries is read from the two operands' dimension names
 ```python
 nb.combined_dims(("P", "Q"), ("Q", "R"))  # ('P', 'Q', 'R')
 nb.combined_dims(("P",), ("Q",))
-# ValueError: frames ('P',) and ('Q',) share no dimension; there is nothing to
-# align them on
+# ValueError: frames ('P',) and ('Q',) share no dimension; expand one operand
+# over the dimensions of the other first
 ```
 
 Frames sharing no dimension have nothing to align on, and their combination would be an outer product no caller asked for, so it is refused rather than performed.
@@ -283,8 +283,8 @@ Alignment is by label throughout, and operands whose shared dimension carries di
 A quotient refuses an absent denominator, which is a coverage question rather than an arithmetic one: a numerator reaching a coordinate the denominator does not carry has no quotient there that is either zero or one.
 
 ```python
-# ValueError: the denominator is absent at 1 coordinate(s) the numerator
-# carries; a quotient there is not zero and not one, so it is refused
+# ValueError: the denominator is absent at 1 coordinate(s) where the numerator
+# has a value; restrict the numerator to the domain of the denominator
 ```
 
 A stored zero, by contrast, is a value the array carries, so dividing by one answers what the arithmetic answers — infinity, or NaN where the numerator is zero too.

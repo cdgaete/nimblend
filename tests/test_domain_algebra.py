@@ -51,7 +51,7 @@ def test_intersect_refuses_a_domain_over_different_dimensions():
         {"x": StoredCoord(np.array(["a", "b"])), "w": StoredCoord(np.array([1, 2, 3]))},
         (2, 3),
     )
-    with pytest.raises(ValueError, match="do not describe the same coordinates"):
+    with pytest.raises(ValueError, match="combine domains over the same frame"):
         domain([0]).intersect(other)
 
 
@@ -220,7 +220,7 @@ def test_expand_multiplies_the_member_count_by_the_extent_added():
 
 
 def test_expand_refuses_a_dimension_already_carried():
-    with pytest.raises(ValueError, match="already carried"):
+    with pytest.raises(ValueError, match="already has"):
         domain([0]).expand(("y",), coords_xy())
 
 
@@ -263,7 +263,7 @@ def test_transpose_to_the_order_already_held_is_the_same_domain():
 
 def test_transpose_refuses_dimensions_that_are_not_the_domains_own():
     for named in (("x",), ("x", "z"), ("x", "y", "y")):
-        with pytest.raises(ValueError, match="once each"):
+        with pytest.raises(ValueError, match="requires each dimension"):
             domain([0]).transpose(*named)
 
 

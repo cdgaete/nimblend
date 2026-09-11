@@ -84,7 +84,7 @@ def test_as_coord_numbers_from_the_start_it_is_given():
 
 def test_as_coord_refuses_a_member_the_domain_does_not_carry():
     coord = Domain(np.array([0, 4]), ("x", "y"), coords_xy(), (2, 3)).as_coord()
-    with pytest.raises(KeyError, match="not carried by this subset"):
+    with pytest.raises(KeyError, match="is not in the subset"):
         coord.to_position(np.array([[0], [2]], dtype=np.int32))
 
 
