@@ -53,6 +53,14 @@ def test_a_member_named_twice_raises_naming_it():
         )
 
 
+def test_a_datetime_member_named_twice_is_reported_as_its_string_form():
+    # the member prints as its ISO string, not as its int64 nanoseconds
+    days = np.array(["2030-01-01", "2031-01-01"], dtype="datetime64[ns]")
+    expected = r"member \('2030-01-01T00:00:00\.000000000',\) appears twice"
+    with pytest.raises(ValueError, match=expected):
+        Domain.from_labels(("t",), {"t": StoredCoord(days)}, {"t": days[[0, 0]]})
+
+
 def test_a_label_the_coordinate_does_not_carry_raises():
     with pytest.raises(KeyError):
         Domain.from_labels(

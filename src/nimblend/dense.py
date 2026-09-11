@@ -194,7 +194,7 @@ class DenseArray:
         lacking = [d for d in domain.dims if d not in self.dims]
         if lacking:
             raise ValueError(
-                f"the domain is over dimension(s) {lacking} and the array is over "
+                f"dimension(s) {lacking} of the domain are not in the array over "
                 f"{self.dims}; pass a domain over dimensions of the array"
             )
         members = np.zeros(domain.shape, dtype=bool)
@@ -678,8 +678,9 @@ class DenseArray:
         """Return the sum over `dim`, or over the whole array when `dim` is None.
 
         With `fill` each absent coordinate counts as `fill`. With `skip=True`
-        only the present coordinates count. Raises ValueError when both are
-        given, or when neither is given under absence "unknown".
+        only the present coordinates count. Raises ValueError for a `skip`
+        other than True or None, when both are given, and when neither is given
+        under absence "unknown".
         """
         return self._reduce(dim, "sum", skip, fill)
 
@@ -692,8 +693,9 @@ class DenseArray:
         """Return the mean over `dim`, or over the whole array when `dim` is None.
 
         With `fill` each absent coordinate counts as `fill`. With `skip=True`
-        only the present coordinates count. Raises ValueError when both are
-        given, or when neither is given under absence "unknown".
+        only the present coordinates count. Raises ValueError for a `skip`
+        other than True or None, when both are given, and when neither is given
+        under absence "unknown".
         """
         return self._reduce(dim, "mean", skip, fill)
 
@@ -706,8 +708,9 @@ class DenseArray:
         """Return the minimum over `dim`, or over the whole array when `dim` is None.
 
         With `fill` each absent coordinate counts as `fill`. With `skip=True`
-        only the present coordinates count. Raises ValueError when both are
-        given, or when neither is given under absence "unknown".
+        only the present coordinates count. Raises ValueError for a `skip`
+        other than True or None, when both are given, and when neither is given
+        under absence "unknown".
         """
         return self._reduce(dim, "min", skip, fill)
 
@@ -720,7 +723,8 @@ class DenseArray:
         """Return the maximum over `dim`, or over the whole array when `dim` is None.
 
         With `fill` each absent coordinate counts as `fill`. With `skip=True`
-        only the present coordinates count. Raises ValueError when both are
-        given, or when neither is given under absence "unknown".
+        only the present coordinates count. Raises ValueError for a `skip`
+        other than True or None, when both are given, and when neither is given
+        under absence "unknown".
         """
         return self._reduce(dim, "max", skip, fill)

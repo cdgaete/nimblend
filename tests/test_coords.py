@@ -1,3 +1,5 @@
+import re
+
 import numpy as np
 import pytest
 
@@ -15,6 +17,28 @@ def test_stored_coord_refuses_an_absent_label():
     c = coords.StoredCoord(np.array(["a", "b"]))
     with pytest.raises(KeyError, match="z"):
         c.to_position(np.array(["z"]))
+
+
+@pytest.mark.parametrize(
+    "labels, missing, shown",
+    [
+        (
+            np.array(["2030-01-01", "2031-01-01"], dtype="datetime64[ns]"),
+            np.array(["2032-01-01"], dtype="datetime64[ns]"),
+            "'2032-01-01T00:00:00.000000000'",
+        ),
+        (
+            np.array([1, 2], dtype="timedelta64[ns]"),
+            np.array([3], dtype="timedelta64[ns]"),
+            "'3 nanoseconds'",
+        ),
+    ],
+)
+def test_an_absent_time_label_is_reported_as_its_string_form(labels, missing, shown):
+    # a datetime64 or timedelta64 label prints as its string, not as its int64
+    expected = re.escape(f"label {shown} is not in the coordinate")
+    with pytest.raises(KeyError, match=expected):
+        coords.StoredCoord(labels).to_position(missing)
 
 
 def test_product_coord_is_stride_arithmetic():

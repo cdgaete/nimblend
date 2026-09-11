@@ -91,7 +91,7 @@ def check_array_contract(make):
 
     with pytest.raises(ValueError, match="leading prefix"):
         arr.group(("y",), into="g")
-    with pytest.raises(ValueError, match="already has"):
+    with pytest.raises(ValueError, match="is among the remaining dimensions"):
         arr.group(("x",), into="y")
     with pytest.raises(ValueError, match="is negative"):
         arr.group(("x",), into="g", offset=-1)

@@ -19,7 +19,12 @@ type Labels = npt.NDArray[Any]
 
 
 def python_value(value: Any) -> Any:
-    """Return a numpy scalar as the equivalent Python value, for a message."""
+    """Return a numpy scalar as the equivalent Python value, for a message.
+
+    A datetime64 or timedelta64 scalar is returned as its string form.
+    """
+    if isinstance(value, (np.datetime64, np.timedelta64)):
+        return str(value)
     return value.item() if isinstance(value, np.generic) else value
 
 

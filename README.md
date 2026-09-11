@@ -272,8 +272,8 @@ The frame a binary result carries is read from the two operands' dimension names
 ```python
 nb.combined_dims(("P", "Q"), ("Q", "R"))  # ('P', 'Q', 'R')
 nb.combined_dims(("P",), ("Q",))
-# ValueError: frames ('P',) and ('Q',) share no dimension; expand one operand
-# over the dimensions of the other first
+# ValueError: frames ('P',) and ('Q',) share no dimension; pass operands that
+# share a dimension
 ```
 
 Frames sharing no dimension have nothing to align on, and their combination would be an outer product no caller asked for, so it is refused rather than performed.

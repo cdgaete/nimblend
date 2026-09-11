@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from nimblend import DenseArray
+from nimblend import DenseArray, SparseArray
 
 LABELS = {"x": np.array(["a", "b", "c"]), "y": np.array([10, 20])}
 VALUES = np.arange(6, dtype=np.float64).reshape(3, 2)
@@ -93,6 +93,18 @@ def test_a_label_named_twice_is_refused():
 def test_a_repeat_is_refused_on_whichever_dimension_carries_it():
     with pytest.raises(ValueError, match="appears twice for dimension 'y'"):
         full().conform(["x", "y"], {"x": LABELS["x"], "y": np.array([10, 10])})
+
+
+def test_a_repeated_datetime_label_is_reported_as_its_string_form():
+    # both implementations print the label as its ISO string, not as int64
+    days = np.array(["2030-01-01", "2031-01-01"], dtype="datetime64[ns]")
+    expected = r"label '2030-01-01T00:00:00\.000000000' appears twice"
+    for arr in (
+        DenseArray.from_dense(np.ones(2), {"t": days}),
+        SparseArray.from_dense(np.ones(2), {"t": days}),
+    ):
+        with pytest.raises(ValueError, match=expected):
+            arr.conform(["t"], {"t": days[[0, 0]]})
 
 
 def test_a_repeat_is_refused_before_any_value_is_read():

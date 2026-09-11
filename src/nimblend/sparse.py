@@ -35,8 +35,8 @@ def combined_dims(left: tuple[str, ...], right: tuple[str, ...]) -> tuple[str, .
     if set(left) & set(right):
         return left + tuple(d for d in right if d not in left)
     raise ValueError(
-        f"frames {left} and {right} share no dimension; expand one operand over "
-        f"the dimensions of the other first"
+        f"frames {left} and {right} share no dimension; pass operands that share "
+        f"a dimension"
     )
 
 
@@ -674,8 +674,9 @@ class SparseArray:
         """Return the sum over `dim`, or over the whole array when `dim` is None.
 
         With `fill` each absent coordinate counts as `fill`. With `skip=True`
-        only the entries count. Raises ValueError when both are given, or when
-        neither is given under absence "unknown".
+        only the entries count. Raises ValueError for a `skip` other than True
+        or None, when both are given, and when neither is given under absence
+        "unknown".
         """
         return self._reduce(dim, "sum", skip, fill)
 
@@ -688,8 +689,9 @@ class SparseArray:
         """Return the mean over `dim`, or over the whole array when `dim` is None.
 
         With `fill` each absent coordinate counts as `fill`. With `skip=True`
-        only the entries count. Raises ValueError when both are given, or when
-        neither is given under absence "unknown".
+        only the entries count. Raises ValueError for a `skip` other than True
+        or None, when both are given, and when neither is given under absence
+        "unknown".
         """
         return self._reduce(dim, "mean", skip, fill)
 
@@ -702,8 +704,9 @@ class SparseArray:
         """Return the minimum over `dim`, or over the whole array when `dim` is None.
 
         With `fill` each absent coordinate counts as `fill`. With `skip=True`
-        only the entries count. Raises ValueError when both are given, or when
-        neither is given under absence "unknown".
+        only the entries count. Raises ValueError for a `skip` other than True
+        or None, when both are given, and when neither is given under absence
+        "unknown".
         """
         return self._reduce(dim, "min", skip, fill)
 
@@ -716,8 +719,9 @@ class SparseArray:
         """Return the maximum over `dim`, or over the whole array when `dim` is None.
 
         With `fill` each absent coordinate counts as `fill`. With `skip=True`
-        only the entries count. Raises ValueError when both are given, or when
-        neither is given under absence "unknown".
+        only the entries count. Raises ValueError for a `skip` other than True
+        or None, when both are given, and when neither is given under absence
+        "unknown".
         """
         return self._reduce(dim, "max", skip, fill)
 
@@ -749,12 +753,12 @@ class SparseArray:
     ) -> "SparseArray":
         """Return `dims` collapsed into one dimension `into`, numbered by a domain.
 
-        An entry is placed along `into` at the position of its member in
-        `domain` plus `offset`. `dims` must be a leading prefix of the
-        dimensions. `domain` defaults to the domain of the entries over `dims`.
-        Entries outside `domain` are dropped. With `out` the entries are written
-        into `out`. Raises ValueError for a negative `offset`, for `dims` that
-        are not a leading prefix, and for an `into` among the other dimensions.
+        An entry is placed along `into` at the position of its member in `domain`
+        plus `offset`. `domain` defaults to `self.domain(dims)`. Entries outside
+        `domain` are dropped. With `out` the entries are written into `out`.
+        `to_csr` raises where a non-zero `offset` places an entry beyond the extent
+        of `into`. Raises ValueError for a negative `offset`, a `dims` that is not
+        a leading prefix, or an `into` among the remaining dimensions.
         """
         dims = tuple(dims)
         offset = int(offset)
@@ -771,7 +775,8 @@ class SparseArray:
         rest = self.dims[len(dims) :]
         if into in rest:
             raise ValueError(
-                f"the result already has dimension {into!r}; pass another name as into"
+                f"dimension {into!r} is among the remaining dimensions {rest}; pass "
+                f"another name as into"
             )
         if domain is None:
             domain = self.domain(dims)

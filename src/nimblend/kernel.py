@@ -228,8 +228,8 @@ def reduce_axis(
 ) -> Block:
     """Return the entries without `axis`, combining those at the same coordinate.
 
-    `op` is "sum", "min" or "max". Entries whose remaining coordinates already
-    ascend are copied without a sort. Removing the only axis of a non-empty
+    `op` is "sum", "min" or "max". Entries whose remaining coordinates strictly
+    ascend are returned without a sort. Removing the only axis of a non-empty
     block returns one entry. With `out` the result is written into `out`.
     Raises ValueError for another `op`.
     """
