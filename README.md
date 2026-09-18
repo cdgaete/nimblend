@@ -245,7 +245,7 @@ A domain is an ordered set, and it defines a numbering of its members. The membe
 shared.as_coord(start=5)  # SubsetCoord(1 of (3, 2), start=5)
 ```
 
-**Effect.** A domain supports intersection, union, difference and symmetric difference, and numbers its members. A consumer finds which members remain after an operation, and gives them positions along a new dimension.
+**Effect.** A domain supports intersection, union, difference and symmetric difference, and numbers its members. `cross(other)` pairs every member with every member of a domain over other dimensions. A consumer finds which members remain after an operation, and gives them positions along a new dimension.
 
 ### 6. One result from many blocks
 
@@ -402,7 +402,7 @@ The excess is constant at 9 MB. It is the working set of one sort-merge, not a s
 
 The package has two layers.
 
-`kernel.py` contains module-level functions over plain numpy buffers: `ravel`, `unravel`, `distinct`, `first_unsorted`, `first_repeat`, `canonicalize`, `align`, `lookup`, `gather`, `select_axis`, `compress`, `take_filled`, `multiply_lookup`, `multiply_join`, `cross`, `cross_keys`, `regroup`, `densify`, `reduce_axis`, `weighted_sum_axis`, `shift_axis`, `to_csr` and `is_canonical`. They take and return numpy arrays, and they use no labels or dimensions. A compiled module with the same signatures can replace the layer.
+`kernel.py` contains module-level functions over plain numpy buffers: `span`, `ravel`, `unravel`, `distinct`, `first_unsorted`, `first_repeat`, `canonicalize`, `align`, `lookup`, `gather`, `select_axis`, `compress`, `take_filled`, `multiply_lookup`, `multiply_join`, `cross`, `cross_keys`, `regroup`, `densify`, `reduce_axis`, `weighted_sum_axis`, `shift_axis`, `to_csr` and `is_canonical`. They take and return numpy arrays, and they use no labels or dimensions. A compiled module with the same signatures can replace the layer.
 
 The array layer, `SparseArray`, `DenseArray`, `Domain` and the coordinates, stores the labels and the frames, validates the arguments, and calls the kernel functions. `SparseArray` and `Domain` call a kernel function for every sort, merge, lookup, gather, replication and reduction along an axis of their entries. These buffer operations are outside the kernel:
 

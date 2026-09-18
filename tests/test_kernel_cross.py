@@ -35,15 +35,32 @@ def test_crossing_an_empty_block_is_empty():
     assert out_data.size == 0
 
 
-def test_cross_keys_numbers_each_key_times_every_new_cell():
-    got = kernel.cross_keys(np.array([1, 4], dtype=np.int64), 3)
-    assert got.tolist() == [3, 4, 5, 12, 13, 14]
+def test_cross_keys_pairs_each_left_key_with_each_right_key():
+    left = np.array([1, 4], dtype=np.int64)
+    right = np.array([0, 2], dtype=np.int64)
+    got = kernel.cross_keys(left, right, 3)
+    assert got.tolist() == [3, 5, 12, 14]
 
 
-def test_cross_keys_agrees_with_cross_over_the_raveled_index():
+def test_cross_keys_of_sorted_keys_ascend():
+    rng = np.random.default_rng(6)
+    left = np.unique(rng.integers(0, 50, 20)).astype(np.int64)
+    right = np.unique(rng.integers(0, 7, 5)).astype(np.int64)
+    assert kernel.first_unsorted(kernel.cross_keys(left, right, 7)) == -1
+
+
+def test_cross_keys_with_no_key_on_a_side_is_empty():
+    keys = np.array([1, 2], dtype=np.int64)
+    empty = np.empty(0, dtype=np.int64)
+    assert kernel.cross_keys(keys, empty, 3).size == 0
+    assert kernel.cross_keys(empty, keys, 3).size == 0
+
+
+def test_cross_keys_with_every_right_key_agrees_with_cross_over_the_index():
     idx = np.array([[0, 1, 1], [2, 0, 1]], dtype=np.int32)
     out_idx, _ = kernel.cross(idx, np.ones(3), (2, 2))
     keys = kernel.ravel(idx, (2, 3))
+    every = np.arange(4, dtype=np.int64)
     assert np.array_equal(
-        kernel.cross_keys(keys, 4), kernel.ravel(out_idx, (2, 3, 2, 2))
+        kernel.cross_keys(keys, every, 4), kernel.ravel(out_idx, (2, 3, 2, 2))
     )

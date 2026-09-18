@@ -18,14 +18,11 @@ type Block = tuple[Index, Values]
 _INT64_MAX = 2**63 - 1
 
 
-def ravel(idx: Index | Sequence[Index], shape: Sequence[int]) -> Keys:
-    """Return one int64 key per entry of `idx`, in C order.
+def span(shape: Sequence[int]) -> int:
+    """Return the number of cells of `shape`.
 
-    Over no dimensions every key is 0. Raises OverflowError when the product
-    of `shape` exceeds the int64 range.
+    Raises OverflowError when the number exceeds the int64 range.
     """
-    if not len(shape):
-        return np.zeros(np.shape(idx)[1], dtype=np.int64)
     total = 1
     for size in shape:
         total *= int(size)
@@ -34,6 +31,18 @@ def ravel(idx: Index | Sequence[Index], shape: Sequence[int]) -> Keys:
                 f"shape {tuple(shape)} exceeds the int64 range of a raveled "
                 f"index key; reduce the number or the extent of the dimensions"
             )
+    return total
+
+
+def ravel(idx: Index | Sequence[Index], shape: Sequence[int]) -> Keys:
+    """Return one int64 key per entry of `idx`, in C order.
+
+    Over no dimensions every key is 0. Raises OverflowError when the product
+    of `shape` exceeds the int64 range.
+    """
+    if not len(shape):
+        return np.zeros(np.shape(idx)[1], dtype=np.int64)
+    span(shape)
     keys = idx[0].astype(np.int64)
     for axis in range(1, len(shape)):
         keys *= int(shape[axis])
@@ -507,12 +516,14 @@ def cross(idx: Index, data: Values, sizes: Sequence[int]) -> Block:
     return index, np.repeat(data, total)
 
 
-def cross_keys(keys: Keys, total: int) -> Keys:
-    """Return each key crossed with each position below `total`, in order.
+def cross_keys(left: Keys, right: Keys, span: int) -> Keys:
+    """Return each left key paired with each right key, as `left * span + right`.
 
-    The key of a pair is `key * total + position`.
+    The pairs are in the order of `left`, then in the order of `right`. Keys
+    that ascend on both sides, with each right key below `span`, give pairs
+    that ascend.
     """
-    return (keys[:, None] * total + np.arange(total, dtype=np.int64)).reshape(-1)
+    return (left[:, None] * span + right[None, :]).reshape(-1)
 
 
 def regroup(

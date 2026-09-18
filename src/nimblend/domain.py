@@ -320,22 +320,30 @@ class Domain:
                 f"it does not have"
             )
         require_coords(dims, coords)
-        shape = self.shape + tuple(int(len(coords[name])) for name in dims)
-        span = 1
-        for size in shape:
-            span *= size
-        if span > np.iinfo(np.int64).max:
-            raise OverflowError(
-                f"shape {shape} exceeds the int64 range of a raveled index key; "
-                f"reduce the number or the extent of the dimensions"
+        kernel.span(self.shape + tuple(int(len(coords[name])) for name in dims))
+        return self.cross(Domain.full(dims, coords))
+
+    def cross(self, other: "Domain") -> "Domain":
+        """Return every member of this domain paired with every member of `other`.
+
+        The result is over `self.dims + other.dims`. Its members are the
+        members of this domain in order, each paired with the members of
+        `other` in order. Raises ValueError for a dimension both domains have.
+        Raises OverflowError when the product of the extents exceeds the int64
+        range.
+        """
+        shared = [d for d in self.dims if d in other.dims]
+        if shared:
+            raise ValueError(
+                f"domains over {self.dims} and {other.dims} share dimension(s) "
+                f"{shared}; pass domains over disjoint dimensions"
             )
-        total = 1
-        for name in dims:
-            total *= int(len(coords[name]))
+        shape = self.shape + other.shape
+        kernel.span(shape)
+        codes = kernel.cross_keys(self.codes, other.codes, kernel.span(other.shape))
         held = dict(self.coords)
-        held.update({name: coords[name] for name in dims})
-        codes = kernel.cross_keys(self.codes, total)
-        return Domain._over(codes, self.dims + dims, held, shape)
+        held.update(other.coords)
+        return Domain._over(codes, self.dims + other.dims, held, shape)
 
     def transpose(self, *dims: str) -> "Domain":
         """Return the same members over the dimensions in the given order.

@@ -29,6 +29,11 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 - `Domain.symmetric_difference(other)` returns the members that exactly one of
   the two domains contains. It raises `ValueError` for domains with different
   frames or labels, as `difference` does.
+- `Domain.cross(other)` returns every member of the domain paired with every
+  member of `other`, over `self.dims + other.dims`. The members of the domain
+  come first, in their order, each paired with the members of `other` in
+  their order. It raises `ValueError` for a dimension both domains have, and
+  `OverflowError` when the product of the extents exceeds the int64 range.
 
 ### Changed
 
