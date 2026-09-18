@@ -22,10 +22,10 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
   coordinate. The `Array` protocol includes `broadcast`.
 - `SparseArray.weighted_sum(dim, weights)` and `DenseArray.weighted_sum(dim,
   weights)` return the sum over `dim` of each entry times the weight at its
-  position along `dim`. The sparse implementation reads the entries in blocks
-  of the kernel function `weighted_sum_axis` and allocates no temporary of the
-  size of the array. Under absence "unknown" they require `skip=True`. The
-  `Array` protocol includes `weighted_sum`.
+  position along `dim`. The sparse implementation calls the kernel function
+  `weighted_sum_axis`. It reads the entries in blocks and allocates no
+  temporary of the size of the array. Under absence "unknown" both require
+  `skip=True`. The `Array` protocol includes `weighted_sum`.
 - `Domain.symmetric_difference(other)` returns the members that exactly one of
   the two domains contains. It raises `ValueError` for domains with different
   frames or labels, as `difference` does.
@@ -38,6 +38,15 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
   `ValueError` where the positions end beyond the extent of `coord`. Every
   position of a grouped array is inside its coordinate: `to_dense`,
   `domain().labels()` and `restrict` return the grouped entries.
+- Operands whose shared dimensions have different labels raise `ValueError`
+  with one message in every operator of both implementations: `dimension(s)
+  [...] have different labels in the two arrays`.
+
+### Fixed
+
+- `min()`, `max()` and `mean()` over the whole of an array with no values
+  raise `ValueError` in both implementations. `sum()` over no values returns
+  0.0. With `fill=` every coordinate of the frame has a value.
 
 ## 0.2.2 - 2026-09-11
 

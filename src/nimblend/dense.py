@@ -8,10 +8,20 @@ import numpy as np
 import numpy.typing as npt
 
 from nimblend import frame, kernel
-from nimblend.coords import Coord, StoredCoord, known_dims, python_value, unique_dims
+from nimblend.coords import (
+    Coord,
+    StoredCoord,
+    distinct_labels,
+    known_dims,
+    require_coords,
+    same_extents,
+    same_labels,
+    unique_dims,
+)
 from nimblend.domain import Domain
-from nimblend.protocol import ABSENCE
-from nimblend.sparse import SparseArray, combined_dims
+from nimblend.frame import combined_dims
+from nimblend.protocol import ABSENCE, same_absence
+from nimblend.sparse import SparseArray
 
 type Grid = npt.NDArray[np.float64]
 type Mask = npt.NDArray[np.bool_]
@@ -43,12 +53,7 @@ class DenseArray:
             raise ValueError(f"absence is 'empty' or 'unknown'; got {absence!r}")
         self.dims = unique_dims(dims)
         self.absence = absence
-        missing = [d for d in self.dims if d not in coords]
-        if missing:
-            raise ValueError(
-                f"no coordinate for dimension(s) {missing}; pass a coordinate "
-                f"for each dimension"
-            )
+        require_coords(self.dims, coords)
         self.coords = {d: coords[d] for d in self.dims}
 
         self.data = np.array(data, dtype=np.float64)
@@ -161,11 +166,6 @@ class DenseArray:
             np.where(self.present, self.data, np.nan), self.coords, self.dims, "unknown"
         )
 
-    def _axes_of(self, dims: Iterable[str], what: str) -> list[int]:
-        dims = tuple(dims)
-        known_dims(what, dims, self.dims)
-        return [self.dims.index(name) for name in dims]
-
     def _sparse(self) -> SparseArray:
         """Return the present coordinates of this array as a `SparseArray`."""
         return SparseArray.from_canonical(
@@ -178,7 +178,7 @@ class DenseArray:
         index = np.stack(np.nonzero(self.present)).astype(np.int32)
         if names == self.dims:
             return index
-        return index[self._axes_of(names, "coordinates")]
+        return index[frame.axes_of(self, names, "coordinates")]
 
     def values(self) -> kernel.Values:
         """Return the values of the present coordinates, in canonical order."""
@@ -203,7 +203,7 @@ class DenseArray:
             )
         members = np.zeros(domain.shape, dtype=bool)
         members[tuple(domain.coordinates())] = True
-        axes = self._axes_of(domain.dims, "restrict")
+        axes = frame.axes_of(self, domain.dims, "restrict")
         held = [1] * len(self.dims)
         for position, axis in enumerate(axes):
             held[axis] = domain.shape[position]
@@ -233,12 +233,7 @@ class DenseArray:
                 f"the array already has dimension(s) {clash}; pass dimensions "
                 f"it does not have"
             )
-        missing = [name for name in dims if name not in coords]
-        if missing:
-            raise ValueError(
-                f"no coordinate for dimension(s) {missing}; pass a coordinate "
-                f"for each dimension"
-            )
+        require_coords(dims, coords)
         widened = self.shape + tuple(len(coords[name]) for name in dims)
         held = self.shape + (1,) * len(dims)
         data = np.broadcast_to(self.data.reshape(held), widened).copy()
@@ -309,7 +304,7 @@ class DenseArray:
             raise ValueError(
                 f"transpose requires each dimension of {self.dims} once; got {dims}"
             )
-        axes = self._axes_of(dims, "transpose")
+        axes = frame.axes_of(self, dims, "transpose")
         mask = None if self.mask is None else np.transpose(self.mask, axes)
         return self._like(np.transpose(self.data, axes), mask, dims)
 
@@ -378,16 +373,6 @@ class DenseArray:
         """
         return self._sparse().group(dims, into, domain, coord, start, out)
 
-    def _distinct_labels(
-        self, name: str, labels: npt.NDArray[Any], positions: kernel.Positions
-    ) -> None:
-        at = kernel.first_repeat(positions)
-        if at >= 0:
-            raise ValueError(
-                f"label {python_value(labels[at])!r} appears twice for dimension "
-                f"{name!r}; pass each label once"
-            )
-
     def conform(
         self, dims: Iterable[str], labels: Mapping[str, npt.ArrayLike]
     ) -> "DenseArray":
@@ -402,45 +387,13 @@ class DenseArray:
             axis = self.dims.index(name)
             wanted = np.asarray(labels[name])
             at = self.coords[name].to_position(wanted)
-            self._distinct_labels(name, wanted, at)
+            distinct_labels(name, wanted, at)
             data = np.take(data, at, axis=axis)
             mask = np.take(mask, at, axis=axis)
             coords[name] = StoredCoord(wanted)
         data, mask = self._tagged(data, mask, self.absence)
         arr = DenseArray(data, coords, self.dims, self.absence, mask)
         return arr.transpose(*dims) if tuple(dims) != arr.dims else arr
-
-    def _conform(self, other: "DenseArray") -> tuple["DenseArray", "DenseArray"]:
-        """Return both operands over the frame from `combined_dims`.
-
-        An operand without a dimension of that frame is replicated across it.
-        Raises ValueError for operands with different absence.
-        """
-        dims = combined_dims(self.dims, other.dims)
-        if self.absence != other.absence:
-            raise ValueError(
-                f"one array declares absence {self.absence!r} and the other "
-                f"{other.absence!r}; convert one with as_empty() or as_unknown()"
-            )
-        return self.broadcast(dims, other.coords), other.broadcast(dims, self.coords)
-
-    def _same_frame(self, other: "DenseArray") -> None:
-        if self.dims != other.dims:
-            raise ValueError(
-                f"dimensions {self.dims} and {other.dims} differ; conform one "
-                f"to the other first"
-            )
-        if self.absence != other.absence:
-            raise ValueError(
-                f"one array declares absence {self.absence!r} and the other "
-                f"{other.absence!r}; convert one with as_empty() or as_unknown()"
-            )
-        differing = [d for d in self.dims if self.coords[d] != other.coords[d]]
-        if differing:
-            raise ValueError(
-                f"dimension(s) {differing} have different labels in the two "
-                f"arrays; conform one to the other first"
-            )
 
     def _scalar(self, value: Scalar, op: Binary) -> "DenseArray":
         data = op(self.data, float(value))
@@ -459,9 +412,9 @@ class DenseArray:
         if isinstance(other, SparseArray):
             return op(self._sparse(), other)
         if self.dims != other.dims:
-            left, right = self._conform(other)
+            left, right = frame.conformed(self, other)
             return left._additive(right, op)
-        self._same_frame(other)
+        frame.same_frame(self, other)
         if self.absence == "unknown":
             return self._like(op(self.data, other.data))
         mine, theirs = self.present, other.present
@@ -518,7 +471,7 @@ class DenseArray:
         if isinstance(other, SparseArray):
             return self._sparse() * other
         if self.dims == other.dims:
-            self._same_frame(other)
+            frame.same_frame(self, other)
             if self.absence == "unknown":
                 return self._like(self.data * other.data)
             both = self.present & other.present
@@ -563,23 +516,6 @@ class DenseArray:
         )
         return DenseArray(data, coords, dims, self.absence, mask)
 
-    def _shared_frame(self, other: "DenseArray", shared: Iterable[str]) -> None:
-        """Check that the operands have equal absence and equal shared labels.
-
-        Raises ValueError otherwise.
-        """
-        if self.absence != other.absence:
-            raise ValueError(
-                f"one array declares absence {self.absence!r} and the other "
-                f"{other.absence!r}; convert one with as_empty() or as_unknown()"
-            )
-        differing = [d for d in shared if self.coords[d] != other.coords[d]]
-        if differing:
-            raise ValueError(
-                f"shared dimension(s) {differing} have different labels in the "
-                f"two operands; conform one to the other first"
-            )
-
     def _broadcast_mul(self, other: "DenseArray") -> "DenseArray":
         """Return the product of two arrays with nested frames, over the wider.
 
@@ -593,14 +529,10 @@ class DenseArray:
                 f"dimensions {narrow.dims} are not a subset of {wide.dims}; pass "
                 f"operands whose frames nest"
             )
-        narrow._shared_frame(wide, narrow.dims)
+        same_absence(narrow, wide)
         shared_shape = tuple(wide.shape[wide.dims.index(d)] for d in narrow.dims)
-        if shared_shape != narrow.shape:
-            raise ValueError(
-                f"shared dimensions {narrow.dims} have size {narrow.shape} in "
-                f"one operand and {shared_shape} in the other; conform one to "
-                f"the other first"
-            )
+        same_extents(narrow.dims, narrow.shape, shared_shape)
+        same_labels(narrow.dims, narrow.coords, wide.coords)
         return wide._product_over(narrow, wide.dims, wide.coords)
 
     def _overlap_mul(self, other: "DenseArray") -> "DenseArray":
@@ -611,7 +543,8 @@ class DenseArray:
         """
         shared = tuple(d for d in self.dims if d in other.dims)
         extra = tuple(d for d in other.dims if d not in self.dims)
-        self._shared_frame(other, shared)
+        same_absence(self, other)
+        same_labels(shared, self.coords, other.coords)
         dims = self.dims + extra
         coords = dict(self.coords)
         coords.update({d: other.coords[d] for d in extra})
@@ -629,9 +562,9 @@ class DenseArray:
         if isinstance(other, SparseArray):
             return self._sparse() / other
         if self.dims != other.dims:
-            left, right = self._conform(other)
+            left, right = frame.conformed(self, other)
             return left / right
-        self._same_frame(other)
+        frame.same_frame(self, other)
         wanted = self.present & ~other.present
         if wanted.any():
             raise ValueError(
@@ -645,18 +578,6 @@ class DenseArray:
             return self._like(data)
         return self._like(np.where(self.present, data, 0.0), self.present.copy())
 
-    def _policy(self, skip: bool | None, fill: float | None) -> None:
-        if skip is not None and skip is not True:
-            raise ValueError(f"skip is True or None; got {skip!r}")
-        if skip is not None and fill is not None:
-            raise ValueError("skip= and fill= are given together; pass one of them")
-        if self.absence == "unknown" and skip is None and fill is None:
-            raise ValueError(
-                "absence is 'unknown' and no reduction policy is given; pass "
-                "skip=True to reduce the present entries, or fill=<value> to "
-                "include the absent coordinates"
-            )
-
     _IDENTITY = {"sum": 0.0, "mean": 0.0, "min": np.inf, "max": -np.inf}
 
     def _reduce(
@@ -664,7 +585,9 @@ class DenseArray:
     ) -> "DenseArray | float":
         if dim is not None:
             known_dims(op, (dim,), self.dims)
-        self._policy(skip, fill)
+        frame.reduction_policy(self, skip, fill)
+        if dim is None:
+            frame.some_values(self, op, fill)
         present = self.present
         if fill is None:
             filled = np.where(present, self.data, self._IDENTITY[op])
@@ -674,8 +597,7 @@ class DenseArray:
 
         if dim is None:
             if op == "mean":
-                counted = int(present.sum())
-                return float(filled.sum() / counted) if counted else float("nan")
+                return float(filled.sum() / int(present.sum()))
             return float(getattr(np, op)(filled))
 
         axis = self.dims.index(dim)

@@ -1,4 +1,4 @@
-"""The `Array` protocol and the two values of `absence`."""
+"""The `Array` protocol, the two values of `absence`, and their check."""
 
 from typing import Any, Protocol, runtime_checkable
 
@@ -61,3 +61,12 @@ class Array(Protocol):
     def __rtruediv__(self, other: Any) -> "Array": ...
     def __pow__(self, other: Any) -> "Array": ...
     def __neg__(self) -> "Array": ...
+
+
+def same_absence(left: Any, right: Any) -> None:
+    """Raise ValueError for two arrays with different absence."""
+    if left.absence != right.absence:
+        raise ValueError(
+            f"one array declares absence {left.absence!r} and the other "
+            f"{right.absence!r}; convert one with as_empty() or as_unknown()"
+        )

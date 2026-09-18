@@ -11,13 +11,17 @@ from nimblend import display, frame, kernel
 from nimblend.coords import (
     Coord,
     StoredCoord,
+    distinct_labels,
     known_dims,
     numbered_from,
-    python_value,
+    require_coords,
+    same_extents,
+    same_labels,
     unique_dims,
 )
 from nimblend.domain import Domain
-from nimblend.protocol import ABSENCE
+from nimblend.frame import combined_dims
+from nimblend.protocol import ABSENCE, same_absence
 
 if TYPE_CHECKING:
     from nimblend.dense import DenseArray
@@ -25,27 +29,6 @@ if TYPE_CHECKING:
 type Scalar = int | float | np.number[Any]
 type Operand = SparseArray | Scalar
 type Binary = Callable[[Any, Any], Any]
-
-
-def combined_dims(left: tuple[str, ...], right: tuple[str, ...]) -> tuple[str, ...]:
-    """Return the dimensions of a binary result from the operands' dimensions.
-
-    Equal frames keep their order. A frame nested in the other gives the
-    wider frame. Overlapping frames give the left dimensions, then those only
-    the right has. Raises ValueError for frames that share no dimension.
-    """
-    if left == right:
-        return left
-    if set(left) <= set(right):
-        return right
-    if set(right) <= set(left):
-        return left
-    if set(left) & set(right):
-        return left + tuple(d for d in right if d not in left)
-    raise ValueError(
-        f"frames {left} and {right} share no dimension; pass operands that share "
-        f"a dimension"
-    )
 
 
 class SparseArray:
@@ -82,12 +65,7 @@ class SparseArray:
             raise ValueError(f"absence is 'empty' or 'unknown'; got {absence!r}")
         self.dims = unique_dims(dims)
         self.absence = absence
-        missing = [d for d in self.dims if d not in coords]
-        if missing:
-            raise ValueError(
-                f"no coordinate for dimension(s) {missing}; pass a coordinate "
-                f"for each dimension"
-            )
+        require_coords(self.dims, coords)
         self.coords = {d: coords[d] for d in self.dims}
 
     @classmethod
@@ -158,11 +136,6 @@ class SparseArray:
             absence=repr(self.absence),
         )
 
-    def _axes_of(self, dims: Iterable[str], what: str) -> list[int]:
-        dims = tuple(dims)
-        known_dims(what, dims, self.dims)
-        return [self.dims.index(name) for name in dims]
-
     def _sub_index(self, axes: list[int]) -> kernel.Index:
         if axes == list(range(len(axes))):
             return self.index[: len(axes)]
@@ -171,7 +144,7 @@ class SparseArray:
     def domain(self, dims: Iterable[str] | None = None) -> Domain:
         """Return the domain of the entries over `dims`."""
         dims = self.dims if dims is None else unique_dims(dims)
-        axes = self._axes_of(dims, "domain")
+        axes = frame.axes_of(self, dims, "domain")
         shape = tuple(self.shape[axis] for axis in axes)
         keys = kernel.ravel(self._sub_index(axes), shape)
         coords = {name: self.coords[name] for name in dims}
@@ -181,7 +154,7 @@ class SparseArray:
         """Return the multi-index of each entry over `dims`, as a copy."""
         dims = self.dims if dims is None else unique_dims(dims)
         return np.array(
-            self._sub_index(self._axes_of(dims, "coordinates")), dtype=np.int32
+            self._sub_index(frame.axes_of(self, dims, "coordinates")), dtype=np.int32
         )
 
     def values(self) -> kernel.Values:
@@ -226,12 +199,7 @@ class SparseArray:
                 f"the array already has dimension(s) {clash}; pass dimensions "
                 f"it does not have"
             )
-        missing = [name for name in dims if name not in coords]
-        if missing:
-            raise ValueError(
-                f"no coordinate for dimension(s) {missing}; pass a coordinate "
-                f"for each dimension"
-            )
+        require_coords(dims, coords)
         sizes = [len(coords[name]) for name in dims]
         total = 1
         for size in sizes:
@@ -354,38 +322,6 @@ class SparseArray:
         """
         return SparseArray(self.index, self.data, self.coords, self.dims, "unknown")
 
-    def _conform(self, other: "SparseArray") -> tuple["SparseArray", "SparseArray"]:
-        """Return both operands over the frame from `combined_dims`.
-
-        An operand without a dimension of that frame is replicated across it.
-        Raises ValueError for operands with different absence.
-        """
-        dims = combined_dims(self.dims, other.dims)
-        if self.absence != other.absence:
-            raise ValueError(
-                f"one array declares absence {self.absence!r} and the other "
-                f"{other.absence!r}; convert one with as_empty() or as_unknown()"
-            )
-        return self.broadcast(dims, other.coords), other.broadcast(dims, self.coords)
-
-    def _same_frame(self, other: "SparseArray") -> None:
-        if self.dims != other.dims:
-            raise ValueError(
-                f"dimensions {self.dims} and {other.dims} differ; conform one "
-                f"to the other first"
-            )
-        differing = [d for d in self.dims if self.coords[d] != other.coords[d]]
-        if differing:
-            raise ValueError(
-                f"dimension(s) {differing} have different labels in the two "
-                f"arrays; conform one to the other first"
-            )
-        if self.absence != other.absence:
-            raise ValueError(
-                f"one array declares absence {self.absence!r} and the other "
-                f"{other.absence!r}; convert one with as_empty() or as_unknown()"
-            )
-
     def _scalar(self, value: Scalar, op: Binary) -> "SparseArray":
         return SparseArray(
             self.index, op(self.data, value), self.coords, self.dims, self.absence
@@ -411,7 +347,7 @@ class SparseArray:
         )
 
     def _combine(self, other: "SparseArray", op: Binary, how: str) -> "SparseArray":
-        self._same_frame(other)
+        frame.same_frame(self, other)
         keys_a = kernel.ravel(self.index, self.shape)
         keys_b = kernel.ravel(other.index, other.shape)
         return self._assemble(other, op, *kernel.align(keys_a, keys_b, how))
@@ -422,7 +358,7 @@ class SparseArray:
         if not isinstance(other, SparseArray):
             return NotImplemented
         if self.dims != other.dims:
-            left, right = self._conform(other)
+            left, right = frame.conformed(self, other)
             return left._additive(right, op)
         how = "union" if self.absence == "empty" else "intersect"
         return self._combine(other, op, how)
@@ -466,25 +402,11 @@ class SparseArray:
                 f"dimensions {narrow.dims} are not a subset of {wide.dims}; pass "
                 f"operands whose frames nest"
             )
-        if narrow.absence != wide.absence:
-            raise ValueError(
-                f"one array declares absence {narrow.absence!r} and the other "
-                f"{wide.absence!r}; convert one with as_empty() or as_unknown()"
-            )
+        same_absence(narrow, wide)
         axes = [wide.dims.index(d) for d in narrow.dims]
         shared_shape = tuple(wide.shape[a] for a in axes)
-        if shared_shape != narrow.shape:
-            raise ValueError(
-                f"shared dimensions {narrow.dims} have size {narrow.shape} in "
-                f"one operand and {shared_shape} in the other; conform one to "
-                f"the other first"
-            )
-        differing = [d for d in narrow.dims if wide.coords[d] != narrow.coords[d]]
-        if differing:
-            raise ValueError(
-                f"shared dimension(s) {differing} have different labels in the "
-                f"two operands; conform one to the other first"
-            )
+        same_extents(narrow.dims, narrow.shape, shared_shape)
+        same_labels(narrow.dims, narrow.coords, wide.coords)
         probe = kernel.ravel(wide.index[axes], shared_shape)
         take = kernel.lookup(kernel.ravel(narrow.index, narrow.shape), probe)
         hit = take >= 0
@@ -502,19 +424,10 @@ class SparseArray:
         only `other` has. An entry with no pair in the other operand is
         dropped.
         """
-        if self.absence != other.absence:
-            raise ValueError(
-                f"one array declares absence {self.absence!r} and the other "
-                f"{other.absence!r}; convert one with as_empty() or as_unknown()"
-            )
+        same_absence(self, other)
         shared = tuple(d for d in self.dims if d in other.dims)
         extra = tuple(d for d in other.dims if d not in self.dims)
-        differing = [d for d in shared if self.coords[d] != other.coords[d]]
-        if differing:
-            raise ValueError(
-                f"shared dimension(s) {differing} have different labels in the "
-                f"two operands; conform one to the other first"
-            )
+        same_labels(shared, self.coords, other.coords)
         mine = [self.dims.index(d) for d in shared]
         theirs = [other.dims.index(d) for d in shared]
         shape = tuple(self.shape[a] for a in mine)
@@ -562,9 +475,9 @@ class SparseArray:
         if set(other.dims) < set(self.dims):
             return self._broadcast_div(other)
         if self.dims != other.dims:
-            left, right = self._conform(other)
+            left, right = frame.conformed(self, other)
             return left / right
-        self._same_frame(other)
+        frame.same_frame(self, other)
         keys_a = kernel.ravel(self.index, self.shape)
         keys_b = kernel.ravel(other.index, other.shape)
         merged, take_a, take_b = kernel.align(keys_a, keys_b, "intersect")
@@ -583,25 +496,11 @@ class SparseArray:
         Each entry is divided by the denominator at its coordinate over the
         shared dimensions. The denominator is not replicated.
         """
-        if self.absence != other.absence:
-            raise ValueError(
-                f"one array declares absence {self.absence!r} and the other "
-                f"{other.absence!r}; convert one with as_empty() or as_unknown()"
-            )
-        axes = self._axes_of(other.dims, "align")
+        same_absence(self, other)
+        axes = frame.axes_of(self, other.dims, "align")
         shared_shape = tuple(self.shape[axis] for axis in axes)
-        if shared_shape != other.shape:
-            raise ValueError(
-                f"shared dimensions {other.dims} have size {other.shape} in "
-                f"one operand and {shared_shape} in the other; conform one to "
-                f"the other first"
-            )
-        differing = [d for d in other.dims if self.coords[d] != other.coords[d]]
-        if differing:
-            raise ValueError(
-                f"shared dimension(s) {differing} have different labels in the "
-                f"two operands; conform one to the other first"
-            )
+        same_extents(other.dims, other.shape, shared_shape)
+        same_labels(other.dims, other.coords, self.coords)
         probe = kernel.ravel(self.index[axes], shared_shape)
         take = kernel.lookup(kernel.ravel(other.index, other.shape), probe)
         absent = int((take < 0).sum())
@@ -640,18 +539,6 @@ class SparseArray:
         with np.errstate(divide="ignore", invalid="ignore"):
             return self._scalar(other, np.power)
 
-    def _policy(self, skip: bool | None, fill: float | None) -> None:
-        if skip is not None and skip is not True:
-            raise ValueError(f"skip is True or None; got {skip!r}")
-        if skip is not None and fill is not None:
-            raise ValueError("skip= and fill= are given together; pass one of them")
-        if self.absence == "unknown" and skip is None and fill is None:
-            raise ValueError(
-                "absence is 'unknown' and no reduction policy is given; pass "
-                "skip=True to reduce the present entries, or fill=<value> to "
-                "include the absent coordinates"
-            )
-
     def _filled(self, value: float) -> npt.NDArray[np.float64]:
         """Return every cell of the frame, with `value` at each absent coordinate.
 
@@ -671,8 +558,9 @@ class SparseArray:
     ) -> "SparseArray | float":
         if dim is not None:
             known_dims(op, (dim,), self.dims)
-        self._policy(skip, fill)
+        frame.reduction_policy(self, skip, fill)
         if dim is None:
+            frame.some_values(self, op, fill)
             dense = self.data if fill is None else self._filled(fill)
             return float(getattr(np, op)(dense))
         axis = self.dims.index(dim)
@@ -826,7 +714,7 @@ class SparseArray:
         outside the extent of `coord`.
         """
         dims = unique_dims(dims)
-        axes = self._axes_of(dims, "group")
+        axes = frame.axes_of(self, dims, "group")
         if axes != list(range(len(dims))):
             raise ValueError(
                 f"dimensions {dims} are at axes {axes} of {self.dims}, not a "
@@ -881,16 +769,6 @@ class SparseArray:
             )
         return kernel.to_csr(self.index, self.data, self.shape)
 
-    def _distinct_labels(
-        self, name: str, labels: npt.NDArray[Any], positions: kernel.Positions
-    ) -> None:
-        at = kernel.first_repeat(positions)
-        if at >= 0:
-            raise ValueError(
-                f"label {python_value(labels[at])!r} appears twice for dimension "
-                f"{name!r}; pass each label once"
-            )
-
     def conform(
         self, dims: Iterable[str], labels: Mapping[str, npt.ArrayLike]
     ) -> "SparseArray":
@@ -905,7 +783,7 @@ class SparseArray:
             axis = self.dims.index(name)
             wanted_labels = np.asarray(labels[name])
             wanted = self.coords[name].to_position(wanted_labels)
-            self._distinct_labels(name, wanted_labels, wanted)
+            distinct_labels(name, wanted_labels, wanted)
             index, data = kernel.gather(index, data, axis, wanted, self.shape[axis])
             coords[name] = StoredCoord(wanted_labels)
         arr = SparseArray(index, data, coords, self.dims, self.absence)

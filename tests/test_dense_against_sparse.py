@@ -13,7 +13,7 @@ def pair(seed, density, absence):
     rng = np.random.default_rng(seed)
     values = np.round(rng.random((3, 4)) * 10, 3)
     mask = rng.random((3, 4)) < density
-    mask[0, 0] = True
+    mask[0, 0] = density > 0
     index = np.stack(np.nonzero(mask)).astype(np.int32)
     sparse = SparseArray.from_canonical(
         index,
@@ -33,7 +33,7 @@ def pair(seed, density, absence):
 CASES = [
     (seed, density, absence)
     for seed in (0, 1, 2)
-    for density in (1.0, 0.6)
+    for density in (1.0, 0.6, 0.0)
     for absence in ("empty", "unknown")
 ]
 
@@ -58,12 +58,44 @@ def test_the_two_implementations_reduce_alike(seed, density, absence):
     sparse, dense = pair(seed, density, absence)
     policy = {"skip": True} if absence == "unknown" else {}
     assert np.isclose(dense.sum(**policy), sparse.sum(**policy))
-    assert np.isclose(dense.min(**policy), sparse.min(**policy))
-    assert np.isclose(dense.max(**policy), sparse.max(**policy))
-    for dim in ("x", "y"):
-        mine = dense.sum(dim, **policy)
-        theirs = sparse.sum(dim, **policy)
-        assert np.allclose(mine.to_dense(fill=0.0), theirs.to_dense(fill=0.0))
+    if sparse.nnz:
+        for op in ("min", "max", "mean"):
+            mine = getattr(dense, op)(**policy)
+            assert np.isclose(mine, getattr(sparse, op)(**policy)), op
+    for op in ("sum", "min", "max", "mean"):
+        for dim in ("x", "y"):
+            mine = getattr(dense, op)(dim, **policy)
+            theirs = getattr(sparse, op)(dim, **policy)
+            assert mine.nnz == theirs.nnz, (op, dim)
+            assert np.allclose(mine.to_dense(fill=0.0), theirs.to_dense(fill=0.0))
+
+
+@pytest.mark.parametrize("absence", ["empty", "unknown"])
+@pytest.mark.parametrize("op", ["min", "max", "mean"])
+def test_both_implementations_raise_for_a_reduction_over_no_values(op, absence):
+    sparse, dense = pair(0, 0.0, absence)
+    policy = {"skip": True} if absence == "unknown" else {}
+    for arr in (sparse, dense):
+        assert arr.nnz == 0
+        with pytest.raises(
+            ValueError, match=f"{op}\\(\\) over an array with no values"
+        ):
+            getattr(arr, op)(**policy)
+
+
+@pytest.mark.parametrize("absence", ["empty", "unknown"])
+def test_both_implementations_sum_no_values_to_zero(absence):
+    sparse, dense = pair(0, 0.0, absence)
+    policy = {"skip": True} if absence == "unknown" else {}
+    assert sparse.sum(**policy) == 0.0
+    assert dense.sum(**policy) == 0.0
+
+
+@pytest.mark.parametrize("op", ["min", "max", "mean"])
+def test_a_fill_gives_a_reduction_over_no_entries_a_value(op):
+    sparse, dense = pair(0, 0.0, "empty")
+    assert getattr(sparse, op)(fill=2.0) == 2.0
+    assert getattr(dense, op)(fill=2.0) == 2.0
 
 
 @pytest.mark.parametrize("seed,density,absence", CASES)

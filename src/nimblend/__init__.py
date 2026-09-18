@@ -13,12 +13,19 @@ import numpy as np
 import numpy.typing as npt
 
 from nimblend.buffer import EntryBuffer
-from nimblend.coords import Coord, ProductCoord, StoredCoord, SubsetCoord
+from nimblend.coords import (
+    Coord,
+    ProductCoord,
+    StoredCoord,
+    SubsetCoord,
+    require_coords,
+)
 from nimblend.dense import DenseArray
 from nimblend.domain import Domain
+from nimblend.frame import combined_dims
 from nimblend.kernel import is_canonical
 from nimblend.protocol import Array
-from nimblend.sparse import SparseArray, combined_dims
+from nimblend.sparse import SparseArray
 
 __version__ = "0.2.2"
 
@@ -55,12 +62,7 @@ def from_long(
     """
     dims = tuple(dims)
     values = np.asarray(values, dtype=np.float64)
-    missing = [d for d in dims if d not in coords]
-    if missing:
-        raise ValueError(
-            f"no coordinate for dimension(s) {missing}; pass a coordinate for "
-            f"each dimension"
-        )
+    require_coords(dims, coords)
     absent = [d for d in dims if d not in labels]
     if absent:
         raise ValueError(

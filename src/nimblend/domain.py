@@ -13,6 +13,7 @@ from nimblend.coords import (
     SubsetCoord,
     numbered_from,
     python_value,
+    require_coords,
     unique_dims,
 )
 from nimblend.kernel import Index, Keys, Positions
@@ -61,12 +62,7 @@ class Domain:
                 f"dimensions {self.dims} and shape {self.shape} have a "
                 f"different number of axes; pass one extent per dimension"
             )
-        missing = [d for d in self.dims if d not in coords]
-        if missing:
-            raise ValueError(
-                f"no coordinate for dimension(s) {missing}; pass a coordinate "
-                f"for each dimension"
-            )
+        require_coords(self.dims, coords)
         self.coords = {d: coords[d] for d in self.dims}
 
     @classmethod
@@ -99,12 +95,7 @@ class Domain:
         dims = tuple(dims)
         if not dims:
             raise ValueError("no dimension is given; pass at least one dimension")
-        missing = [d for d in dims if d not in coords]
-        if missing:
-            raise ValueError(
-                f"no coordinate for dimension(s) {missing}; pass a coordinate "
-                f"for each dimension"
-            )
+        require_coords(dims, coords)
         index = np.asarray(index, dtype=np.int32)
         if index.ndim != 2 or index.shape[0] != len(dims):
             raise ValueError(
@@ -141,12 +132,7 @@ class Domain:
         dims = tuple(dims)
         if not dims:
             raise ValueError("no dimension is given; pass at least one dimension")
-        missing = [d for d in dims if d not in coords]
-        if missing:
-            raise ValueError(
-                f"no coordinate for dimension(s) {missing}; pass a coordinate "
-                f"for each dimension"
-            )
+        require_coords(dims, coords)
         absent = [d for d in dims if d not in labels]
         if absent:
             raise ValueError(
@@ -190,12 +176,7 @@ class Domain:
         Raises ValueError for a dimension without a coordinate.
         """
         dims = tuple(dims)
-        missing = [d for d in dims if d not in coords]
-        if missing:
-            raise ValueError(
-                f"no coordinate for dimension(s) {missing}; pass a coordinate "
-                f"for each dimension"
-            )
+        require_coords(dims, coords)
         shape = tuple(len(coords[d]) for d in dims)
         total = 1
         for size in shape:
@@ -360,12 +341,7 @@ class Domain:
                 f"the domain already has dimension(s) {clash}; pass dimensions "
                 f"it does not have"
             )
-        missing = [name for name in dims if name not in coords]
-        if missing:
-            raise ValueError(
-                f"no coordinate for dimension(s) {missing}; pass a coordinate "
-                f"for each dimension"
-            )
+        require_coords(dims, coords)
         shape = self.shape + tuple(int(len(coords[name])) for name in dims)
         span = 1
         for size in shape:

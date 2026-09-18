@@ -6,7 +6,7 @@ Two coordinates are equal when they map the same labels to the same
 positions.
 """
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
 import numpy as np
@@ -211,3 +211,49 @@ def numbered_from(size: int, into: str, coord: Coord, start: int) -> int:
             f"pass a smaller start or a larger coord"
         )
     return start
+
+
+def require_coords(dims: Iterable[str], coords: Mapping[str, Coord]) -> None:
+    """Raise ValueError for a dimension of `dims` without a coordinate in `coords`."""
+    missing = [d for d in dims if d not in coords]
+    if missing:
+        raise ValueError(
+            f"no coordinate for dimension(s) {missing}; pass a coordinate for "
+            f"each dimension"
+        )
+
+
+def same_labels(
+    dims: Iterable[str], left: Mapping[str, Coord], right: Mapping[str, Coord]
+) -> None:
+    """Raise ValueError for a dimension of `dims` with unequal coordinates.
+
+    `left` and `right` map each dimension of `dims` to a coordinate.
+    """
+    differing = [d for d in dims if left[d] != right[d]]
+    if differing:
+        raise ValueError(
+            f"dimension(s) {differing} have different labels in the two arrays; "
+            f"conform one to the other first"
+        )
+
+
+def same_extents(
+    dims: tuple[str, ...], left: tuple[int, ...], right: tuple[int, ...]
+) -> None:
+    """Raise ValueError for two shapes of `dims` that differ."""
+    if left != right:
+        raise ValueError(
+            f"shared dimensions {dims} have size {left} in one operand and "
+            f"{right} in the other; conform one to the other first"
+        )
+
+
+def distinct_labels(name: str, labels: Labels, positions: Positions) -> None:
+    """Raise ValueError for a label of dimension `name` given twice."""
+    at = kernel.first_repeat(positions)
+    if at >= 0:
+        raise ValueError(
+            f"label {python_value(labels[at])!r} appears twice for dimension "
+            f"{name!r}; pass each label once"
+        )
