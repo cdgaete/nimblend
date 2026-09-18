@@ -192,3 +192,22 @@ class SubsetCoord:
 
 
 type Coord = StoredCoord | ProductCoord | SubsetCoord
+
+
+def numbered_from(size: int, into: str, coord: Coord, start: int) -> int:
+    """Return `start` as an int for `size` positions numbered inside `coord`.
+
+    Raises ValueError for a negative `start`, and for positions from `start`
+    that end beyond the extent of `coord`.
+    """
+    start = int(start)
+    if start < 0:
+        raise ValueError(f"start {start} is negative; pass a start of 0 or more")
+    extent = len(coord)
+    if start + size > extent:
+        raise ValueError(
+            f"{size} member(s) numbered from {start} end at position "
+            f"{start + size - 1}, and dimension {into!r} has extent {extent}; "
+            f"pass a smaller start or a larger coord"
+        )
+    return start

@@ -11,8 +11,8 @@ from nimblend import display, kernel
 from nimblend.coords import (
     Coord,
     StoredCoord,
-    SubsetCoord,
     known_dims,
+    numbered_from,
     python_value,
     unique_dims,
 )
@@ -784,24 +784,22 @@ class SparseArray:
         dims: Iterable[str],
         into: str,
         domain: Domain | None = None,
-        offset: int = 0,
+        coord: Coord | None = None,
+        start: int = 0,
         out: kernel.Block | None = None,
     ) -> "SparseArray":
         """Return `dims` collapsed into one dimension `into`, numbered by a domain.
 
-        An entry is placed along `into` at the position of its member in `domain`
-        plus `offset`. `domain` defaults to `self.domain(dims)`. Entries outside
-        `domain` are dropped. With `out` the entries are written into `out`.
-        `to_csr` raises where a non-zero `offset` places an entry beyond the extent
-        of `into`. Raises ValueError for a negative `offset`, a `dims` that is not
-        a leading prefix, or an `into` among the remaining dimensions.
+        An entry is placed along `into` at the rank of its member in `domain`
+        plus `start`. `domain` defaults to `self.domain(dims)`. `coord` is the
+        coordinate of `into` and defaults to `domain.as_coord()`. Its extent can
+        exceed the member count when several arrays share one numbering. Entries
+        outside `domain` are dropped. With `out` the entries are written into
+        `out`. Raises ValueError for a `dims` that is not a leading prefix, an
+        `into` among the remaining dimensions, a negative `start`, or positions
+        outside the extent of `coord`.
         """
         dims = unique_dims(dims)
-        offset = int(offset)
-        if offset < 0:
-            raise ValueError(
-                f"offset {offset} is negative; pass an offset of 0 or more"
-            )
         axes = self._axes_of(dims, "group")
         if axes != list(range(len(dims))):
             raise ValueError(
@@ -816,6 +814,9 @@ class SparseArray:
             )
         if domain is None:
             domain = self.domain(dims)
+        if coord is None:
+            coord = domain.as_coord()
+        start = numbered_from(domain.size, into, coord, start)
         at = domain.positions_of(self)
         keep = at >= 0
         n = int(keep.sum())
@@ -824,11 +825,11 @@ class SparseArray:
             out_data = np.empty(n, dtype=np.float64)
         else:
             out_index, out_data = out[0][:, :n], out[1][:n]
-        np.add(at[keep], np.int32(offset), out=out_index[0], casting="unsafe")
+        np.add(at[keep], np.int32(start), out=out_index[0], casting="unsafe")
         for at_rest, axis in enumerate(range(len(dims), len(self.dims))):
             np.compress(keep, self.index[axis], out=out_index[1 + at_rest])
         np.compress(keep, self.data, out=out_data)
-        coords = {into: SubsetCoord(domain.codes, domain.shape, start=offset)}
+        coords = {into: coord}
         coords.update({name: self.coords[name] for name in rest})
         return SparseArray.from_canonical(
             out_index, out_data, coords, (into,) + rest, self.absence
@@ -839,7 +840,8 @@ class SparseArray:
 
         The column indices and the values are views of the entry buffers. Only
         the row pointer is computed. Raises ValueError for an array without two
-        dimensions, and for row positions outside the extent of the first.
+        dimensions, and for an entry whose position along the first dimension is
+        outside its extent.
         """
         if len(self.dims) != 2:
             raise ValueError(f"to_csr requires two dimensions; got {self.dims}")

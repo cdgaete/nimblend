@@ -8,7 +8,13 @@ import numpy as np
 import numpy.typing as npt
 
 from nimblend import display, kernel
-from nimblend.coords import Coord, SubsetCoord, python_value, unique_dims
+from nimblend.coords import (
+    Coord,
+    SubsetCoord,
+    numbered_from,
+    python_value,
+    unique_dims,
+)
 from nimblend.kernel import Index, Keys, Positions
 
 if TYPE_CHECKING:
@@ -434,16 +440,7 @@ class Domain:
             raise ValueError(
                 f"the domain already has dimension {into!r}; pass another name as into"
             )
-        start = int(start)
-        if start < 0:
-            raise ValueError(f"start {start} is negative; pass a start of 0 or more")
-        extent = len(coord)
-        if start + self.size > extent:
-            raise ValueError(
-                f"{self.size} member(s) numbered from {start} end at position "
-                f"{start + self.size - 1}, and dimension {into!r} has extent "
-                f"{extent}; pass a smaller start or a larger coord"
-            )
+        start = numbered_from(self.size, into, coord, start)
         index = np.empty((len(self.dims) + 1, self.size), dtype=np.int32)
         index[:-1] = self.coordinates()
         index[-1] = np.arange(start, start + self.size, dtype=np.int32)

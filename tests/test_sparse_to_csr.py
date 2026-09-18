@@ -37,8 +37,8 @@ def test_indices_are_int32_so_a_solver_takes_them_without_a_cast():
 
 
 def test_to_csr_refuses_rows_outside_the_row_extent():
-    # a block numbered from an offset has row positions beyond the extent of
-    # its own coordinate
+    # from_canonical does not check positions, so buffers built by hand can
+    # place entries beyond the extent of the first coordinate
     index = np.array([[10, 11], [1, 0]], dtype=np.int32)
     coords = {"r": StoredCoord(np.arange(3)), "c": StoredCoord(np.arange(4))}
     arr = SparseArray.from_canonical(index, np.array([5.0, 6.0]), coords, ("r", "c"))

@@ -321,7 +321,7 @@ Every operation below is part of the `Array` protocol, and both implementations 
 
 ## Grouping and matrix export
 
-`group` replaces a tuple of dimensions with one dimension, numbered by a domain. The index of a member along the new dimension is its position in the domain plus `offset`.
+`group` replaces a tuple of dimensions with one dimension, numbered by a domain. The position of a member along the new dimension is its rank in the domain plus `start`. `coord` is the coordinate of the new dimension, and defaults to the domain numbered from 0.
 
 ```python
 grouped = demand.group(("year",), into="g")
@@ -329,7 +329,7 @@ grouped  # SparseArray(('g', 'region'), shape=(2, 2), nnz=3, absence='empty')
 grouped.coords["g"]  # SubsetCoord(2 of (3,), start=0)
 ```
 
-The grouped dimensions are a leading prefix of the canonical order, and `group` raises `ValueError` otherwise. The result is then canonical as written and requires no sort. An entry at a coordinate outside the domain is removed. A non-zero `offset` numbers the result into a wider extent, and several results then share one destination buffer and one numbering.
+The grouped dimensions are a leading prefix of the canonical order, and `group` raises `ValueError` otherwise. The result is then canonical as written and requires no sort. An entry at a coordinate outside the domain is removed. A `coord` with an extent larger than the member count and a non-zero `start` number the result inside a wider extent, and several results then share one destination buffer and one numbering. `group` raises `ValueError` for positions outside the extent of `coord`.
 
 `to_csr` exports a two-dimensional array as CSR arrays. Canonical order sorts by row and then by column, the order CSR requires. The column indices and the values are returned as views, and only the row pointer is built:
 
@@ -338,7 +338,7 @@ indices, values, indptr = grouped.to_csr()
 # [0, 0, 1]  [5.0, 6.0, 7.0]  [0, 1, 3]
 ```
 
-`to_csr` raises `ValueError` where a row position is outside the extent of the first dimension, as a non-zero `offset` can produce.
+`to_csr` raises `ValueError` where a row position is outside the extent of the first dimension.
 
 ## Assembling blocks into one buffer
 

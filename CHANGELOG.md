@@ -13,6 +13,15 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ## Unreleased
 
+### Changed
+
+- `group` takes `coord=` and `start=` in place of `offset=`. `coord` is the
+  coordinate of the new dimension and defaults to the domain numbered from 0.
+  An entry is placed at the rank of its member plus `start`. `group` raises
+  `ValueError` where the positions end beyond the extent of `coord`. Every
+  position of a grouped array is inside its coordinate: `to_dense`,
+  `domain().labels()` and `restrict` return the grouped entries.
+
 ## 0.2.2 - 2026-09-11
 
 ### Changed

@@ -43,7 +43,8 @@ class Array(Protocol):
         dims: tuple[str, ...],
         into: str,
         domain: Any = None,
-        offset: int = 0,
+        coord: Any = None,
+        start: int = 0,
         out: Any = None,
     ) -> "Array": ...
     def as_empty(self) -> "Array": ...

@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from nimblend import protocol
-from nimblend.coords import StoredCoord
+from nimblend.coords import ProductCoord, StoredCoord
 from nimblend.domain import Domain
 
 
@@ -70,9 +70,10 @@ def check_array_contract(make):
     assert narrowed.dims == ("g", "y")
     assert np.array_equal(narrowed.to_dense(), values[1:])
 
-    # an offset numbers the result into an extent wider than its members span
-    shifted = arr.group(("x",), into="g", offset=5)
+    # a start numbers the result inside a coord wider than its members span
+    shifted = arr.group(("x",), into="g", coord=ProductCoord((8,)), start=5)
     assert shifted.coordinates()[0].tolist() == [5, 5, 5, 6, 6, 6]
+    assert np.array_equal(shifted.to_dense()[5:7], values)
 
     # a shift of nothing moves nothing out of the frame, so it drops nothing
     assert np.array_equal(arr.shift({"x": 0}).to_dense(), values)
@@ -94,7 +95,9 @@ def check_array_contract(make):
     with pytest.raises(ValueError, match="is among the remaining dimensions"):
         arr.group(("x",), into="y")
     with pytest.raises(ValueError, match="is negative"):
-        arr.group(("x",), into="g", offset=-1)
+        arr.group(("x",), into="g", coord=ProductCoord((8,)), start=-1)
+    with pytest.raises(ValueError, match="pass a smaller start or a larger coord"):
+        arr.group(("x",), into="g", start=1)
 
     check_frame_contract(arr)
     check_arithmetic_contract(arr, make(values, labels, "empty"))

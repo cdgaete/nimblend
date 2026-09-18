@@ -1,8 +1,12 @@
+import re
+
 import numpy as np
 import pytest
 
 from nimblend import kernel
 from nimblend.buffer import EntryBuffer
+from nimblend.coords import ProductCoord
+from nimblend.domain import Domain
 from nimblend.sparse import SparseArray
 
 
@@ -38,14 +42,54 @@ def test_group_collapses_the_named_dimensions_into_one():
     assert got.data.tolist() == [5.0, 7.0, 4.0, 9.0]
 
 
-def test_group_numbers_the_new_dimension_from_the_offset():
-    got = ijc().group(("i", "j"), "g", offset=10)
+def test_group_numbers_the_new_dimension_from_start_inside_the_given_coord():
+    got = ijc().group(("i", "j"), "g", coord=ProductCoord((20,)), start=10)
+    assert got.coords["g"] == ProductCoord((20,))
+    assert got.shape == (20, 4)
     assert got.index[0].tolist() == [10, 11, 12, 12]
 
 
 def test_the_new_dimension_reads_back_the_coordinates_it_stands_for():
-    got = ijc().group(("i", "j"), "g", offset=10)
-    assert got.coords["g"].to_index(np.array([10, 12])).tolist() == [[0, 1], [0, 1]]
+    got = ijc().group(("i", "j"), "g")
+    assert got.coords["g"].to_index(np.array([0, 2])).tolist() == [[0, 1], [0, 1]]
+
+
+def test_without_a_coord_the_new_dimension_is_the_domain_numbered_from_zero():
+    arr = ijc()
+    got = arr.group(("i", "j"), "g")
+    assert got.coords["g"] == arr.domain(("i", "j")).as_coord()
+
+
+def test_every_position_of_a_numbered_group_is_inside_its_coordinate():
+    got = ijc().group(("i", "j"), "g", coord=ProductCoord((20,)), start=10)
+    dense = got.to_dense()
+    assert dense.shape == (20, 4)
+    assert dense[10, 1] == 5.0
+    assert dense[12, 3] == 9.0
+    assert got.domain().labels()["g"][:, 0].tolist() == [10]
+    assert got.restrict(Domain.full(got.dims, got.coords)).nnz == got.nnz
+    _, _, indptr = got.to_csr()
+    assert indptr.tolist() == [0] * 11 + [1, 2, 4] + [4] * 7
+
+
+def test_group_raises_for_a_start_without_a_coord_that_covers_it():
+    # the default coord has one position per member and no room for a start
+    with pytest.raises(ValueError, match="has extent 3; pass a smaller start"):
+        ijc().group(("i", "j"), "g", start=5)
+
+
+def test_group_raises_for_members_that_end_beyond_the_coord():
+    message = (
+        "3 member(s) numbered from 18 end at position 20, and dimension 'g' "
+        "has extent 20; pass a smaller start or a larger coord"
+    )
+    with pytest.raises(ValueError, match=re.escape(message)):
+        ijc().group(("i", "j"), "g", coord=ProductCoord((20,)), start=18)
+
+
+def test_group_accepts_members_that_end_at_the_last_position_of_the_coord():
+    got = ijc().group(("i", "j"), "g", coord=ProductCoord((20,)), start=17)
+    assert got.index[0].tolist() == [17, 18, 19, 19]
 
 
 def test_group_leaves_the_result_canonical():
@@ -86,17 +130,17 @@ def test_group_keeps_the_arrays_absence():
     assert got.absence == "unknown"
 
 
-def test_group_refuses_a_negative_offset():
+def test_group_refuses_a_negative_start():
     # a negative index wraps to the far end of the axis, scrambling the block
-    with pytest.raises(ValueError, match="offset"):
-        ijc().group(("i", "j"), "g", offset=-1)
+    with pytest.raises(ValueError, match="start -1 is negative"):
+        ijc().group(("i", "j"), "g", coord=ProductCoord((20,)), start=-1)
 
 
 def test_grouping_no_dimensions_collapses_every_entry_into_one_row():
     arr = ijc()
-    got = arr.group((), "g", offset=5)
+    got = arr.group((), "g", coord=ProductCoord((6,)), start=5)
     assert got.dims == ("g", "i", "j", "c")
-    assert got.shape[0] == 1
+    assert got.shape[0] == 6
     assert got.nnz == arr.nnz
     assert got.coordinates()[0].tolist() == [5, 5, 5, 5]
 

@@ -353,7 +353,8 @@ class DenseArray:
         dims: Iterable[str],
         into: str,
         domain: Domain | None = None,
-        offset: int = 0,
+        coord: Coord | None = None,
+        start: int = 0,
         out: kernel.Block | None = None,
     ) -> SparseArray:
         """Return `dims` collapsed into one dimension `into`, numbered by a domain.
@@ -361,7 +362,7 @@ class DenseArray:
         The result is a `SparseArray`, computed by `SparseArray.group` from the
         present coordinates.
         """
-        return self._sparse().group(dims, into, domain, offset, out)
+        return self._sparse().group(dims, into, domain, coord, start, out)
 
     def _distinct_labels(
         self, name: str, labels: npt.NDArray[Any], positions: kernel.Positions
