@@ -168,15 +168,13 @@ class SubsetCoord:
             and bool(np.array_equal(self.codes, other.codes))
         )
 
-    def to_position(self, index: npt.NDArray[Any]) -> kernel.Keys:
+    def to_position(self, index: npt.NDArray[Any]) -> Positions:
         """Return the position of each column of an index matrix.
 
         Raises KeyError for a cell the subset does not contain.
         """
-        keys = kernel.ravel(index, self.sizes)
-        at = np.searchsorted(self.codes, keys)
-        probe = np.minimum(at, self.codes.size - 1)
-        miss = self.codes[probe] != keys
+        at = kernel.lookup(self.codes, kernel.ravel(index, self.sizes))
+        miss = at < 0
         if miss.any():
             raise KeyError(
                 f"cell {tuple(int(v) for v in index[:, np.flatnonzero(miss)[0]])} "

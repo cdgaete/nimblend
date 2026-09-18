@@ -70,6 +70,18 @@ def distinct(keys: Keys) -> Keys:
     return np.unique(keys)
 
 
+def first_unsorted(keys: Keys) -> int:
+    """Return the first position `i` with `keys[i + 1] <= keys[i]`, or -1.
+
+    The result is -1 when the keys strictly ascend.
+    """
+    if keys.size < 2:
+        return -1
+    step = keys[1:] <= keys[:-1]
+    at = int(np.argmax(step))
+    return at if bool(step[at]) else -1
+
+
 def first_repeat(keys: Positions) -> int:
     """Return the position of a repeated key, or -1 when the keys are distinct.
 
@@ -400,8 +412,7 @@ def is_canonical(idx: Index, shape: Sequence[int]) -> bool:
     """Return True when `idx` ascends by raveled key with no repeated key."""
     if idx.shape[1] < 2:
         return True
-    keys = ravel(idx, shape)
-    return bool(np.all(np.diff(keys) > 0))
+    return first_unsorted(ravel(idx, shape)) < 0
 
 
 def lookup(keys: Keys, probe: Positions) -> Positions:
@@ -415,3 +426,135 @@ def lookup(keys: Keys, probe: Positions) -> Positions:
     np.minimum(at, keys.size - 1, out=at)
     at[keys[at] != probe] = -1
     return at
+
+
+def select_axis(
+    idx: Index, data: Values, axis: int, position: int, axis_len: int
+) -> Block:
+    """Return the entries at `position` along `axis`, without that axis."""
+    kept_idx, kept_data = gather(idx, data, axis, np.array([position]), axis_len)
+    return np.delete(kept_idx, axis, axis=0), kept_data
+
+
+def take_filled(data: Values, take: Positions, fill: float = 0.0) -> Values:
+    """Return `data[take]`, with `fill` where `take` is -1."""
+    out = np.full(take.size, fill, dtype=np.float64)
+    has = take >= 0
+    out[has] = data[take[has]]
+    return out
+
+
+def compress(idx: Index, data: Values, keep: npt.NDArray[np.bool_]) -> Block:
+    """Return the entries where `keep` is True, in their order."""
+    return idx[:, keep], data[keep]
+
+
+def multiply_lookup(idx: Index, data: Values, other: Values, take: Positions) -> Block:
+    """Return the entries where `take` is not -1, each value times `other[take]`."""
+    hit = take >= 0
+    return idx[:, hit], data[hit] * other[take[hit]]
+
+
+def multiply_join(
+    idx_a: Index,
+    data_a: Values,
+    keys_a: Keys,
+    idx_b: Index,
+    data_b: Values,
+    keys_b: Keys,
+    axes_b: Sequence[int],
+) -> Block:
+    """Return one entry per pair of entries with equal keys, valued by their product.
+
+    The index of an entry is its index in `idx_a`, then the axes `axes_b` of
+    its index in `idx_b`. The entries are ordered by their position in
+    `idx_a`, then by their position in `idx_b`. The keys do not need to be
+    sorted or unique.
+    """
+    order = np.argsort(keys_b, kind="stable")
+    sorted_b = keys_b[order]
+    low = np.searchsorted(sorted_b, keys_a, "left")
+    counts = np.searchsorted(sorted_b, keys_a, "right") - low
+    total = int(counts.sum())
+    take_a = np.repeat(np.arange(keys_a.size), counts)
+    offsets = np.arange(total) - np.repeat(np.cumsum(counts) - counts, counts)
+    take_b = order[np.repeat(low, counts) + offsets]
+    held = idx_a.shape[0]
+    index = np.empty((held + len(axes_b), total), dtype=np.int32)
+    np.take(idx_a, take_a, axis=1, out=index[:held])
+    for at, axis in enumerate(axes_b, start=held):
+        np.take(idx_b[axis], take_b, out=index[at])
+    return index, data_a[take_a] * data_b[take_b]
+
+
+def cross(idx: Index, data: Values, sizes: Sequence[int]) -> Block:
+    """Return each entry repeated once per cell of `sizes`, those positions appended.
+
+    The new rows follow the rows of `idx`, and the cells of `sizes` are in C
+    order. A canonical block returns a canonical block.
+    """
+    total = 1
+    for size in sizes:
+        total *= int(size)
+    held = idx.shape[0]
+    count = data.size
+    index = np.empty((held + len(sizes), count * total), dtype=np.int32)
+    for axis in range(held):
+        index[axis] = np.repeat(idx[axis], total)
+    grid = unravel(np.arange(total, dtype=np.int64), sizes)
+    for at in range(len(sizes)):
+        index[held + at] = np.tile(grid[at], count)
+    return index, np.repeat(data, total)
+
+
+def cross_keys(keys: Keys, total: int) -> Keys:
+    """Return each key crossed with each position below `total`, in order.
+
+    The key of a pair is `key * total + position`.
+    """
+    return (keys[:, None] * total + np.arange(total, dtype=np.int64)).reshape(-1)
+
+
+def regroup(
+    idx: Index,
+    data: Values,
+    at: Positions,
+    lead: int,
+    start: int,
+    out: Block | None = None,
+) -> Block:
+    """Return the entries with their first `lead` rows replaced by `at + start`.
+
+    An entry where `at` is -1 is dropped. With `out` the result is written
+    into `out`.
+    """
+    keep = at >= 0
+    count = int(keep.sum())
+    rest = idx.shape[0] - lead
+    if out is None:
+        out_idx = np.empty((1 + rest, count), dtype=np.int32)
+        out_data = np.empty(count, dtype=np.float64)
+    else:
+        out_idx, out_data = out[0][:, :count], out[1][:count]
+    np.add(at[keep], np.int32(start), out=out_idx[0], casting="unsafe")
+    for row in range(rest):
+        np.compress(keep, idx[lead + row], out=out_idx[1 + row])
+    np.compress(keep, data, out=out_data)
+    return out_idx, out_data
+
+
+def densify(
+    idx: Index, data: Values, shape: Sequence[int], fill: float
+) -> npt.NDArray[np.float64]:
+    """Return an array of `shape` with each value at its index and `fill` elsewhere.
+
+    Over no axes the result has one cell.
+    """
+    out = np.full(tuple(shape), fill, dtype=np.float64)
+    if not data.size:
+        return out
+    if not len(shape):
+        out[()] = data[0]
+        return out
+    out[tuple(idx)] = data
+    return out

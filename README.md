@@ -357,7 +357,7 @@ buffer.array(
 # SparseArray(('a', 'b'), shape=(4, 2), nnz=3, absence='empty')
 ```
 
-`buffer.array(...)` does not copy. `group`, `kernel.reduce_axis`, `kernel.gather` and `kernel.shift_axis` accept a reserved slice as the `out=` destination.
+`buffer.array(...)` does not copy. `group`, `kernel.regroup`, `kernel.reduce_axis`, `kernel.gather` and `kernel.shift_axis` accept a reserved slice as the `out=` destination.
 
 `SparseArray.from_canonical` builds an array from canonical buffers without a copy. The caller guarantees that the index is sorted with no key repeated. `nb.is_canonical(index, shape)` checks that condition. It raises `TypeError` for an index that is not integer, and `ValueError` for an index that is not a 2-D matrix with one row per extent and each position inside its extent. `from_canonical` does not check it: the check requires the ravel that the method avoids.
 
@@ -402,9 +402,19 @@ The excess is constant at 9 MB. It is the working set of one sort-merge, not a s
 
 The package has two layers.
 
-`kernel.py` contains module-level functions over plain numpy buffers: `ravel`, `unravel`, `distinct`, `canonicalize`, `align`, `gather`, `reduce_axis`, `weighted_sum_axis`, `shift_axis`, `to_csr`, `lookup`, `first_repeat` and `is_canonical`. They take and return numpy arrays, and they use no labels or dimensions. Every array operation calls them. A compiled module with the same signatures can replace the layer.
+`kernel.py` contains module-level functions over plain numpy buffers: `ravel`, `unravel`, `distinct`, `first_unsorted`, `first_repeat`, `canonicalize`, `align`, `lookup`, `gather`, `select_axis`, `compress`, `take_filled`, `multiply_lookup`, `multiply_join`, `cross`, `cross_keys`, `regroup`, `densify`, `reduce_axis`, `weighted_sum_axis`, `shift_axis`, `to_csr` and `is_canonical`. They take and return numpy arrays, and they use no labels or dimensions. A compiled module with the same signatures can replace the layer.
 
-The array layer, `SparseArray`, `DenseArray`, `Domain` and the coordinates, stores the labels and the frames, validates the arguments, and calls the kernel functions.
+The array layer, `SparseArray`, `DenseArray`, `Domain` and the coordinates, stores the labels and the frames, validates the arguments, and calls the kernel functions. `SparseArray` and `Domain` call a kernel function for every sort, merge, lookup, gather, replication and reduction along an axis of their entries. These buffer operations are outside the kernel:
+
+- `StoredCoord.to_position` sorts and searches the stored labels, and `StoredCoord.to_index` indexes them. The kernel uses no labels.
+- `ProductCoord` and `SubsetCoord` add `start` to a position or subtract it, and `SubsetCoord.to_index` indexes its codes by position.
+- `DenseArray` stores a grid, and its operations are numpy operations over the grid.
+- An operator applies its numpy function, such as `np.add` or `np.divide`, to the value vectors of the aligned entries. `mean` divides the sums by the counts.
+- A reduction over the whole array applies the numpy reduction to the values. A reduction with `fill=` applies it to the grid that `densify` returns.
+- `from_dense`, `Domain.full`, `Domain.identity`, `EntryBuffer` and `mean` allocate new buffers with `np.indices`, `np.arange`, `np.ones`, `np.ones_like` and `np.empty`.
+- Several methods select or permute rows of the index matrix with numpy indexing before a kernel call. `transpose` permutes them, and the constructor then sorts the entries with `canonicalize`.
+- `Domain.difference` and `Domain.symmetric_difference` select codes by a mask of the take-vectors from `lookup` and `align`.
+- `coordinates()` and `values()` copy the buffers.
 
 Four design choices are visible in the interface. Sorting uses a single int64 ravel key: an order over several dimensions is one `argsort`, not a lexsort. Alignment is a merge over sorted keys with a take-vector per operand, not a hash join. A block whose keys already ascend is not sorted again. Stored zeros are kept: a stored zero marks a present coordinate.
 

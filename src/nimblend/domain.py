@@ -41,15 +41,13 @@ class Domain:
     ) -> None:
         self._set_frame(dims, coords, shape)
         codes = np.asarray(codes, dtype=np.int64)
-        if codes.size > 1:
-            step = np.diff(codes)
-            if not bool(np.all(step > 0)):
-                at = int(np.flatnonzero(step <= 0)[0])
-                raise ValueError(
-                    f"domain code {int(codes[at])} at position {at} is followed "
-                    f"by {int(codes[at + 1])}; pass codes that ascend without "
-                    f"repeating"
-                )
+        at = kernel.first_unsorted(codes)
+        if at >= 0:
+            raise ValueError(
+                f"domain code {int(codes[at])} at position {at} is followed "
+                f"by {int(codes[at + 1])}; pass codes that ascend without "
+                f"repeating"
+            )
         self.codes = codes
 
     def _set_frame(
@@ -336,9 +334,7 @@ class Domain:
             total *= int(len(coords[name]))
         held = dict(self.coords)
         held.update({name: coords[name] for name in dims})
-        codes = (
-            self.codes[:, None] * total + np.arange(total, dtype=np.int64)
-        ).reshape(-1)
+        codes = kernel.cross_keys(self.codes, total)
         return Domain._over(codes, self.dims + dims, held, shape)
 
     def transpose(self, *dims: str) -> "Domain":
@@ -355,8 +351,7 @@ class Domain:
             return self
         axes = [self.dims.index(name) for name in dims]
         shape = tuple(self.shape[axis] for axis in axes)
-        keys = kernel.ravel(self.coordinates()[axes], shape)
-        keys.sort()
+        keys = kernel.distinct(kernel.ravel(self.coordinates()[axes], shape))
         return Domain._over(keys, dims, self.coords, shape)
 
     def as_coord(self, start: int = 0) -> SubsetCoord:

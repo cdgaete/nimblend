@@ -73,6 +73,17 @@ def test_subset_coord_refuses_a_cell_it_does_not_hold():
         c.to_position(np.array([[2], [2]], dtype=np.int32))
 
 
+def test_an_empty_subset_coord_raises_key_error_for_any_cell():
+    c = coords.SubsetCoord(np.empty(0, dtype=np.int64), (2, 3))
+    with pytest.raises(KeyError, match=re.escape("cell (0, 1) is not in the subset")):
+        c.to_position(np.array([[0], [1]], dtype=np.int32))
+
+
+def test_a_subset_coord_numbered_from_a_start_adds_it_to_the_rank():
+    c = coords.SubsetCoord(np.array([1, 5], dtype=np.int64), (3, 3), start=10)
+    assert list(c.to_position(np.array([[1, 0], [2, 1]], dtype=np.int32))) == [11, 10]
+
+
 def test_stored_coords_are_equal_when_they_name_the_same_labels():
     a = coords.StoredCoord(np.array(["a", "b"]))
     assert a == coords.StoredCoord(np.array(["a", "b"]))

@@ -214,8 +214,9 @@ class SparseArray:
         keep = at >= 0
         if bool(keep.all()):
             return self
+        index, data = kernel.compress(self.index, self.data, keep)
         return SparseArray.from_canonical(
-            self.index[:, keep], self.data[keep], self.coords, self.dims, self.absence
+            index, data, self.coords, self.dims, self.absence
         )
 
     def expand(self, dims: Iterable[str], coords: Mapping[str, Coord]) -> "SparseArray":
@@ -234,18 +235,9 @@ class SparseArray:
                 f"it does not have"
             )
         require_coords(dims, coords)
-        sizes = [len(coords[name]) for name in dims]
-        total = 1
-        for size in sizes:
-            total *= int(size)
-        held = len(self.dims)
-        index = np.empty((held + len(dims), self.nnz * total), dtype=np.int32)
-        for axis in range(held):
-            index[axis] = np.repeat(self.index[axis], total)
-        grid = kernel.unravel(np.arange(total, dtype=np.int64), sizes)
-        for at in range(len(dims)):
-            index[held + at] = np.tile(grid[at], self.nnz)
-        data = np.repeat(self.data, total)
+        index, data = kernel.cross(
+            self.index, self.data, [len(coords[name]) for name in dims]
+        )
         out_coords = dict(self.coords)
         out_coords.update({name: coords[name] for name in dims})
         return SparseArray.from_canonical(
@@ -335,9 +327,7 @@ class SparseArray:
         for name, label in indexers.items():
             axis = dims.index(name)
             at = int(coords[name].to_position(np.asarray([label]))[0])
-            keep = np.flatnonzero(index[axis] == at)
-            index = np.delete(index[:, keep], axis, axis=0)
-            data = data[keep]
+            index, data = kernel.select_axis(index, data, axis, at, len(coords[name]))
             dims.pop(axis)
             del coords[name]
         return SparseArray(index, data, coords, tuple(dims), self.absence)
@@ -369,12 +359,8 @@ class SparseArray:
         take_a: kernel.Positions,
         take_b: kernel.Positions,
     ) -> "SparseArray":
-        left = np.zeros(merged.size, dtype=np.float64)
-        right = np.zeros(merged.size, dtype=np.float64)
-        has_a = take_a >= 0
-        has_b = take_b >= 0
-        left[has_a] = self.data[take_a[has_a]]
-        right[has_b] = other.data[take_b[has_b]]
+        left = kernel.take_filled(self.data, take_a)
+        right = kernel.take_filled(other.data, take_b)
         index = kernel.unravel(merged, self.shape)
         return SparseArray.from_canonical(
             index, op(left, right), self.coords, self.dims, self.absence
@@ -443,9 +429,7 @@ class SparseArray:
         same_labels(narrow.dims, narrow.coords, wide.coords)
         probe = kernel.ravel(wide.index[axes], shared_shape)
         take = kernel.lookup(kernel.ravel(narrow.index, narrow.shape), probe)
-        hit = take >= 0
-        index = wide.index[:, hit]
-        data = wide.data[hit] * narrow.data[take[hit]]
+        index, data = kernel.multiply_lookup(wide.index, wide.data, narrow.data, take)
         return SparseArray.from_canonical(
             index, data, wide.coords, wide.dims, wide.absence
         )
@@ -465,29 +449,18 @@ class SparseArray:
         mine = [self.dims.index(d) for d in shared]
         theirs = [other.dims.index(d) for d in shared]
         shape = tuple(self.shape[a] for a in mine)
-        keys = kernel.ravel(self.index[mine], shape)
-        against = kernel.ravel(other.index[theirs], shape)
-        order = np.argsort(against, kind="stable")
-        sorted_against = against[order]
-        lo = np.searchsorted(sorted_against, keys, "left")
-        counts = np.searchsorted(sorted_against, keys, "right") - lo
-        total = int(counts.sum())
-        take_mine = np.repeat(np.arange(keys.size), counts)
-        offsets = np.arange(total) - np.repeat(np.cumsum(counts) - counts, counts)
-        take_theirs = order[np.repeat(lo, counts) + offsets]
-        index = np.empty((len(self.dims) + len(extra), total), dtype=np.int32)
-        index[: len(self.dims)] = self.index[:, take_mine]
-        for row, dim in enumerate(extra, start=len(self.dims)):
-            index[row] = other.index[other.dims.index(dim)][take_theirs]
+        index, data = kernel.multiply_join(
+            self.index,
+            self.data,
+            kernel.ravel(self.index[mine], shape),
+            other.index,
+            other.data,
+            kernel.ravel(other.index[theirs], shape),
+            [other.dims.index(d) for d in extra],
+        )
         coords = dict(self.coords)
         coords.update({d: other.coords[d] for d in extra})
-        return SparseArray(
-            index,
-            self.data[take_mine] * other.data[take_theirs],
-            coords,
-            self.dims + extra,
-            self.absence,
-        )
+        return SparseArray(index, data, coords, self.dims + extra, self.absence)
 
     def __rmul__(
         self, other: "Operand | DenseArray"
@@ -545,7 +518,7 @@ class SparseArray:
                 f"of the denominator"
             )
         with np.errstate(divide="ignore", invalid="ignore"):
-            data = self.data / other.data[take]
+            data = self.data / kernel.take_filled(other.data, take)
         return SparseArray.from_canonical(
             self.index, data, self.coords, self.dims, self.absence
         )
@@ -578,14 +551,7 @@ class SparseArray:
 
         A frame over no dimensions is a single cell.
         """
-        out = np.full(self.shape, value, dtype=np.float64)
-        if not self.nnz:
-            return out
-        if not self.dims:
-            out[()] = self.data[0]
-            return out
-        out[tuple(self.index)] = self.data
-        return out
+        return kernel.densify(self.index, self.data, self.shape, value)
 
     def _reduce(
         self, dim: str | None, op: str, skip: bool | None, fill: float | None
@@ -765,18 +731,9 @@ class SparseArray:
         if coord is None:
             coord = domain.as_coord()
         start = numbered_from(domain.size, into, coord, start)
-        at = domain.positions_of(self)
-        keep = at >= 0
-        n = int(keep.sum())
-        if out is None:
-            out_index = np.empty((1 + len(rest), n), dtype=np.int32)
-            out_data = np.empty(n, dtype=np.float64)
-        else:
-            out_index, out_data = out[0][:, :n], out[1][:n]
-        np.add(at[keep], np.int32(start), out=out_index[0], casting="unsafe")
-        for at_rest, axis in enumerate(range(len(dims), len(self.dims))):
-            np.compress(keep, self.index[axis], out=out_index[1 + at_rest])
-        np.compress(keep, self.data, out=out_data)
+        out_index, out_data = kernel.regroup(
+            self.index, self.data, domain.positions_of(self), len(dims), start, out
+        )
         coords = {into: coord}
         coords.update({name: self.coords[name] for name in rest})
         return SparseArray.from_canonical(

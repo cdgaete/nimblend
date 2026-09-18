@@ -59,6 +59,8 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
   reports the label count of each column. `from_long` raises `ValueError`
   where the label count differs from the value count. `from_long` over no
   dimensions returns an array over no dimension.
+- `SubsetCoord.to_position` over a subset with no member raises `KeyError`
+  for any cell, as it does for a cell outside a non-empty subset.
 
 ## 0.2.2 - 2026-09-11
 
