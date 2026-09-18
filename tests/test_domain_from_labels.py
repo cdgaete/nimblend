@@ -1,3 +1,5 @@
+import re
+
 import numpy as np
 import pytest
 
@@ -100,9 +102,33 @@ def test_naming_no_dimension_at_all_raises():
 
 def test_a_coordinate_that_cannot_read_a_label_column_raises():
     # a generated coordinate reads an index matrix, not a column of labels
-    with pytest.raises(ValueError, match="one position per label"):
+    with pytest.raises(ValueError, match="pass one label per position"):
         Domain.from_labels(
             ("g",), {"g": ProductCoord((2, 3))}, {"g": np.array([0, 1, 2])}
+        )
+
+
+def test_a_label_column_of_a_generated_coordinate_counts_its_matrix_columns():
+    # two labels over (2, 3): the multi-indices (0, 2) and (1, 0)
+    got = Domain.from_labels(
+        ("g", "x"),
+        {"g": ProductCoord((2, 3)), "x": StoredCoord(np.array(["a", "b"]))},
+        {"g": np.array([[0, 1], [2, 0]]), "x": np.array(["a", "b"])},
+    )
+    assert got.size == 2
+    assert got.coordinates().tolist() == [[2, 3], [0, 1]]
+
+
+def test_the_length_of_a_generated_label_column_is_its_label_count():
+    message = (
+        "label columns have different lengths {'g': 2, 'x': 3}; pass columns "
+        "of equal length"
+    )
+    with pytest.raises(ValueError, match=re.escape(message)):
+        Domain.from_labels(
+            ("g", "x"),
+            {"g": ProductCoord((2, 3)), "x": StoredCoord(np.array(["a", "b", "c"]))},
+            {"g": np.array([[0, 1], [2, 0]]), "x": np.array(["a", "b", "c"])},
         )
 
 

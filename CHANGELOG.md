@@ -47,6 +47,13 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 - `min()`, `max()` and `mean()` over the whole of an array with no values
   raise `ValueError` in both implementations. `sum()` over no values returns
   0.0. With `fill=` every coordinate of the frame has a value.
+- `from_long` and `Domain.from_labels` convert every label column with one
+  function. A label column of a `ProductCoord` or a `SubsetCoord` is an index
+  matrix with one column per label, and its length is that label count. Both
+  raise `ValueError` for columns of different lengths, and the message
+  reports the label count of each column. `from_long` raises `ValueError`
+  where the label count differs from the value count. `from_long` over no
+  dimensions returns an array over no dimension.
 
 ## 0.2.2 - 2026-09-11
 

@@ -18,7 +18,7 @@ from nimblend.coords import (
     ProductCoord,
     StoredCoord,
     SubsetCoord,
-    require_coords,
+    label_positions,
 )
 from nimblend.dense import DenseArray
 from nimblend.domain import Domain
@@ -56,30 +56,16 @@ def from_long(
     """Return an array from one label column per dimension and one value column.
 
     Each label column is converted to positions by the coordinate of its
-    dimension. All columns have equal length. Raises ValueError for a missing
-    coordinate or label column and for columns of different lengths. Raises
-    KeyError for a label the coordinate does not contain.
+    dimension. A label column of a `ProductCoord` or a `SubsetCoord` is an
+    index matrix with one column per label. Every column has one label per
+    value. Raises ValueError for a missing coordinate or label column and for
+    columns of different lengths. Raises KeyError for a label the coordinate
+    does not contain.
     """
     dims = tuple(dims)
     values = np.asarray(values, dtype=np.float64)
-    require_coords(dims, coords)
-    absent = [d for d in dims if d not in labels]
-    if absent:
-        raise ValueError(
-            f"no label column for dimension(s) {absent}; pass a label column "
-            f"for each dimension"
-        )
-    index = []
-    for name in dims:
-        column = np.asarray(labels[name])
-        if column.size != values.size:
-            raise ValueError(
-                f"label column {name!r} has length {column.size} and the "
-                f"value column has length {values.size}; pass columns of equal "
-                f"length"
-            )
-        index.append(np.asarray(coords[name].to_position(column), dtype=np.int32))
-    return SparseArray(np.stack(index), values, coords, dims, absence)
+    index = label_positions(dims, coords, labels, values.size)
+    return SparseArray(index, values, coords, dims, absence)
 
 
 def from_dense(

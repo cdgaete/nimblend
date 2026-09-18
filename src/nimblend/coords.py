@@ -257,3 +257,64 @@ def distinct_labels(name: str, labels: Labels, positions: Positions) -> None:
             f"label {python_value(labels[at])!r} appears twice for dimension "
             f"{name!r}; pass each label once"
         )
+
+
+def label_at(coord: Coord, position: int) -> Any:
+    """Return the label at `position` as a Python value, for a message.
+
+    The label of a `ProductCoord` or a `SubsetCoord` is a tuple of ints.
+    """
+    label = coord.to_index(np.array([position]))
+    if label.ndim == 1:
+        return python_value(label[0])
+    return tuple(int(v) for v in label[:, 0])
+
+
+def label_positions(
+    dims: tuple[str, ...],
+    coords: Mapping[str, Coord],
+    labels: Mapping[str, npt.ArrayLike],
+    length: int | None = None,
+) -> kernel.Index:
+    """Return the position of each label, one row per dimension of `dims`.
+
+    The coordinate of each dimension converts its label column. A label
+    column of a `ProductCoord` or a `SubsetCoord` is an index matrix with one
+    column per label. With `length` every column has `length` labels. Raises
+    ValueError for a missing coordinate or label column, a column that does
+    not convert to one position per label, and columns with different label
+    counts. Raises KeyError for a label the coordinate does not contain.
+    """
+    require_coords(dims, coords)
+    absent = [d for d in dims if d not in labels]
+    if absent:
+        raise ValueError(
+            f"no label column for dimension(s) {absent}; pass a label column "
+            f"for each dimension"
+        )
+    rows = []
+    for name in dims:
+        column = np.asarray(labels[name])
+        at = np.asarray(coords[name].to_position(column))
+        if at.ndim != 1:
+            raise ValueError(
+                f"the coordinate of dimension {name!r} converts a label column "
+                f"of shape {column.shape} to positions of shape {at.shape}; pass "
+                f"one label per position"
+            )
+        rows.append(at.astype(np.int32))
+    lengths = {name: int(at.size) for name, at in zip(dims, rows, strict=True)}
+    counts = set(lengths.values())
+    if length is None and len(counts) > 1:
+        raise ValueError(
+            f"label columns have different lengths {lengths}; pass columns of "
+            f"equal length"
+        )
+    if length is not None and counts - {length}:
+        raise ValueError(
+            f"label columns have lengths {lengths} and the value column has "
+            f"length {length}; pass columns of equal length"
+        )
+    if not rows:
+        return np.empty((0, length or 0), dtype=np.int32)
+    return np.stack(rows)

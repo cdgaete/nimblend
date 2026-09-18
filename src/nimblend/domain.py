@@ -11,8 +11,9 @@ from nimblend import display, kernel
 from nimblend.coords import (
     Coord,
     SubsetCoord,
+    label_at,
+    label_positions,
     numbered_from,
-    python_value,
     require_coords,
     unique_dims,
 )
@@ -124,45 +125,24 @@ class Domain:
         """Return a domain from one label column per dimension.
 
         Each label column is converted to positions by the coordinate of its
-        dimension. All columns have equal length. Raises ValueError for no
-        dimensions, a missing coordinate or label column, columns of different
-        lengths and a repeated member. Raises KeyError for a label the
-        coordinate does not contain.
+        dimension. A label column of a `ProductCoord` or a `SubsetCoord` is an
+        index matrix with one column per label. All columns have equal length.
+        Raises ValueError for no dimensions, a missing coordinate or label
+        column, columns of different lengths and a repeated member. Raises
+        KeyError for a label the coordinate does not contain.
         """
         dims = tuple(dims)
         if not dims:
             raise ValueError("no dimension is given; pass at least one dimension")
-        require_coords(dims, coords)
-        absent = [d for d in dims if d not in labels]
-        if absent:
-            raise ValueError(
-                f"no label column for dimension(s) {absent}; pass a label column "
-                f"for each dimension"
-            )
-        columns = {d: np.asarray(labels[d]) for d in dims}
-        lengths = {d: int(column.size) for d, column in columns.items()}
-        if len(set(lengths.values())) > 1:
-            raise ValueError(
-                f"label columns have different lengths {lengths}; pass columns "
-                f"of equal length"
-            )
-        n = lengths[dims[0]]
+        index = label_positions(dims, coords, labels)
         shape = tuple(len(coords[d]) for d in dims)
-        rows = []
-        for d in dims:
-            at = np.asarray(coords[d].to_position(columns[d]))
-            if at.shape != (n,):
-                raise ValueError(
-                    f"the coordinate of dimension {d!r} returns shape "
-                    f"{at.shape} for {n} label(s); pass a coordinate that "
-                    f"returns one position per label"
-                )
-            rows.append(at.astype(np.int32))
-        keys = kernel.ravel(np.stack(rows), shape)
+        keys = kernel.ravel(index, shape)
         codes = kernel.distinct(keys)
         if codes.size != keys.size:
             at = kernel.first_repeat(keys)
-            member = tuple(python_value(columns[d][at]) for d in dims)
+            member = tuple(
+                label_at(coords[d], index[axis, at]) for axis, d in enumerate(dims)
+            )
             raise ValueError(
                 f"member {member} appears twice in the label columns; pass each "
                 f"member once"

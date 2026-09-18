@@ -1,3 +1,5 @@
+import re
+
 import numpy as np
 import pytest
 
@@ -106,6 +108,47 @@ def test_from_long_refuses_a_label_the_coordinate_does_not_carry():
             {"t": np.array([2050])},
             np.array([1.0]),
         )
+
+
+def test_from_long_reads_an_index_matrix_for_a_generated_coordinate():
+    # two labels over (2, 3): the multi-indices (0, 2) and (1, 0)
+    arr = nb.from_long(
+        ("k",),
+        {"k": nb.ProductCoord((2, 3))},
+        {"k": np.array([[0, 1], [2, 0]])},
+        np.array([1.0, 2.0]),
+    )
+    assert arr.coordinates().tolist() == [[2, 3]]
+    assert arr.values().tolist() == [1.0, 2.0]
+
+
+def test_from_long_counts_the_labels_of_a_generated_coordinate():
+    message = (
+        "label columns have lengths {'k': 2} and the value column has length 4; "
+        "pass columns of equal length"
+    )
+    with pytest.raises(ValueError, match=re.escape(message)):
+        nb.from_long(
+            ("k",),
+            {"k": nb.ProductCoord((2, 3))},
+            {"k": np.array([[0, 1], [2, 0]])},
+            np.array([1.0, 2.0, 3.0, 4.0]),
+        )
+
+
+def test_from_long_and_from_labels_report_the_same_label_counts():
+    coords = {"k": nb.ProductCoord((2, 3)), "t": nb.StoredCoord(np.arange(3))}
+    labels = {"k": np.array([[0, 1], [2, 0]]), "t": np.arange(3)}
+    with pytest.raises(ValueError, match=re.escape("{'k': 2, 't': 3}")):
+        nb.from_long(("k", "t"), coords, labels, np.ones(2))
+    with pytest.raises(ValueError, match=re.escape("{'k': 2, 't': 3}")):
+        nb.Domain.from_labels(("k", "t"), coords, labels)
+
+
+def test_from_long_over_no_dimension_holds_one_value():
+    arr = nb.from_long((), {}, {}, np.array([5.0]))
+    assert arr.dims == ()
+    assert arr.values().tolist() == [5.0]
 
 
 def test_from_dense_round_trips():
