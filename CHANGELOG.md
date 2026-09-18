@@ -20,6 +20,12 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
   across each dimension of `dims` it does not have. They raise `ValueError`
   for a dimension of the array not in `dims`, and for a dimension without a
   coordinate. The `Array` protocol includes `broadcast`.
+- `SparseArray.weighted_sum(dim, weights)` and `DenseArray.weighted_sum(dim,
+  weights)` return the sum over `dim` of each entry times the weight at its
+  position along `dim`. The sparse implementation reads the entries in blocks
+  of the kernel function `weighted_sum_axis` and allocates no temporary of the
+  size of the array. Under absence "unknown" they require `skip=True`. The
+  `Array` protocol includes `weighted_sum`.
 
 ### Changed
 

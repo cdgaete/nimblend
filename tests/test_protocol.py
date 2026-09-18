@@ -25,6 +25,7 @@ def test_the_protocol_names_every_member_the_contract_requires():
         "mean",
         "min",
         "max",
+        "weighted_sum",
         "shift",
         "roll",
         "rename",

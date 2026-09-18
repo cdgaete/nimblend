@@ -300,7 +300,7 @@ Every operation below is part of the `Array` protocol, and both implementations 
 
 **Arithmetic.** `+`, `-`, `*`, `/`, `**` by a number, unary `-`, and the reflected forms. The exponent of `**` is a number. An array as the exponent raises `TypeError`.
 
-**Reductions.** `sum`, `mean`, `min` and `max`, over one named dimension or over the whole array. Each takes the `skip=` or `fill=` policy that an `"unknown"` array requires. Reducing every dimension in turn returns an array over no dimension, with one entry: the total.
+**Reductions.** `sum`, `mean`, `min` and `max`, over one named dimension or over the whole array. Each takes the `skip=` or `fill=` policy that an `"unknown"` array requires. Reducing every dimension in turn returns an array over no dimension, with one entry: the total. `weighted_sum(dim, weights)` returns the sum over `dim` of each entry times the weight at its position along `dim`, with one weight per position. It equals the product with an array of the weights over `dim`, summed over `dim`. `SparseArray.weighted_sum` reads the entries in blocks and allocates no temporary of the size of the array.
 
 **Selection and reshaping**
 
@@ -402,7 +402,7 @@ The excess is constant at 9 MB. It is the working set of one sort-merge, not a s
 
 The package has two layers.
 
-`kernel.py` contains module-level functions over plain numpy buffers: `ravel`, `unravel`, `distinct`, `canonicalize`, `align`, `gather`, `reduce_axis`, `shift_axis`, `to_csr`, `lookup`, `first_repeat` and `is_canonical`. They take and return numpy arrays, and they use no labels or dimensions. Every array operation calls them. A compiled module with the same signatures can replace the layer.
+`kernel.py` contains module-level functions over plain numpy buffers: `ravel`, `unravel`, `distinct`, `canonicalize`, `align`, `gather`, `reduce_axis`, `weighted_sum_axis`, `shift_axis`, `to_csr`, `lookup`, `first_repeat` and `is_canonical`. They take and return numpy arrays, and they use no labels or dimensions. Every array operation calls them. A compiled module with the same signatures can replace the layer.
 
 The array layer, `SparseArray`, `DenseArray`, `Domain` and the coordinates, stores the labels and the frames, validates the arguments, and calls the kernel functions.
 

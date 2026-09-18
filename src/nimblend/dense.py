@@ -751,3 +751,27 @@ class DenseArray:
         under absence "unknown".
         """
         return self._reduce(dim, "max", skip, fill)
+
+    def weighted_sum(
+        self, dim: str, weights: npt.ArrayLike, skip: bool | None = None
+    ) -> "DenseArray":
+        """Return the sum over `dim` of each value times the weight at its position.
+
+        The result equals `(self * w).sum(dim)` for an array `w` of `weights`
+        over `dim`.
+        `weights` has one value per position along `dim`. With `skip=True`
+        only the present coordinates count. Raises ValueError for a `dim` the array does
+        not have, weights of another shape, a `skip` other than True or None,
+        and no `skip=True` under absence "unknown".
+        """
+        axis, weights = frame.weights_along(self, dim, weights, skip)
+        present = self.present
+        view = [1] * len(self.dims)
+        view[axis] = weights.size
+        filled = np.where(present, self.data, 0.0) * weights.reshape(view)
+        dims = tuple(d for d in self.dims if d != dim)
+        coords = {d: self.coords[d] for d in dims}
+        data, mask = self._tagged(
+            filled.sum(axis=axis), present.any(axis=axis), self.absence
+        )
+        return DenseArray(data, coords, dims, self.absence, mask)

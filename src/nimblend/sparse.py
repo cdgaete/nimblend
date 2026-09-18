@@ -759,6 +759,26 @@ class SparseArray:
         """
         return self._reduce(dim, "max", skip, fill)
 
+    def weighted_sum(
+        self, dim: str, weights: npt.ArrayLike, skip: bool | None = None
+    ) -> "SparseArray":
+        """Return the sum over `dim` of each entry times the weight at its position.
+
+        The result equals `(self * w).sum(dim)` for an array `w` of `weights`
+        over `dim`. No temporary of the size of the array is allocated.
+        `weights` has one value per position along `dim`. With `skip=True`
+        only the entries count. Raises ValueError for a `dim` the array does
+        not have, weights of another shape, a `skip` other than True or None,
+        and no `skip=True` under absence "unknown".
+        """
+        axis, weights = frame.weights_along(self, dim, weights, skip)
+        index, data = kernel.weighted_sum_axis(
+            self.index, self.data, axis, weights, self.shape
+        )
+        dims = tuple(d for d in self.dims if d != dim)
+        coords = {d: self.coords[d] for d in dims}
+        return SparseArray.from_canonical(index, data, coords, dims, self.absence)
+
     def shift(self, shifts: Mapping[str, int], mode: str = "drop") -> "SparseArray":
         """Return the entries moved along each dimension in `shifts`.
 

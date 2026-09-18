@@ -280,6 +280,72 @@ def reduce_axis(
     return out_idx, out_data
 
 
+def _sum_runs(keys: Keys, values: Values) -> tuple[Keys, Values]:
+    """Return the distinct keys of sorted `keys` and the sum of each run."""
+    first = np.empty(keys.size, dtype=bool)
+    first[0] = True
+    np.not_equal(keys[1:], keys[:-1], out=first[1:])
+    starts = np.flatnonzero(first)
+    return keys[starts], np.add.reduceat(values, starts)
+
+
+def weighted_sum_axis(
+    idx: Index,
+    data: Values,
+    axis: int,
+    weights: Values,
+    shape: Sequence[int],
+    block: int = 1 << 22,
+) -> Block:
+    """Return the entries without `axis`, summing each value times its weight.
+
+    `weights` has one value per position along `axis`. Entries at the same
+    remaining coordinate are summed, and the result is canonical. The entries
+    are read in slices of at most `block`. A temporary has at most `block`
+    elements, or one element per cell over the remaining axes when the cells
+    do not outnumber the entries. Raises ValueError for a `block` below 1.
+    """
+    block = int(block)
+    if block < 1:
+        raise ValueError(f"block {block} is below 1; pass a block of 1 or more")
+    kept = [a for a in range(idx.shape[0]) if a != axis]
+    sub_shape = [shape[a] for a in kept]
+    if data.size == 0:
+        return np.empty((len(kept), 0), dtype=np.int32), np.empty(0, np.float64)
+    span = 1
+    for size in sub_shape:
+        span *= int(size)
+    slices = [slice(at, at + block) for at in range(0, data.size, block)]
+    if span <= data.size:
+        sums = np.zeros(span, dtype=np.float64)
+        seen = np.zeros(span, dtype=bool)
+        for at in slices:
+            part_keys = ravel(idx[kept, at], sub_shape)
+            part = data[at] * weights[idx[axis, at]]
+            sums += np.bincount(part_keys, weights=part, minlength=span)
+            seen[part_keys] = True
+        keys = np.flatnonzero(seen)
+        return unravel(keys, sub_shape), sums[keys]
+    keys = np.empty(0, dtype=np.int64)
+    sums = np.empty(0, dtype=np.float64)
+    for at in slices:
+        part_keys = ravel(idx[kept, at], sub_shape)
+        part = data[at] * weights[idx[axis, at]]
+        if not bool(np.all(part_keys[1:] >= part_keys[:-1])):
+            order = np.argsort(part_keys, kind="stable")
+            part_keys = part_keys[order]
+            part = part[order]
+        part_keys, part = _sum_runs(part_keys, part)
+        keys, take_old, take_new = align(keys, part_keys, "union")
+        merged = np.zeros(keys.size, dtype=np.float64)
+        has_old = take_old >= 0
+        merged[has_old] = sums[take_old[has_old]]
+        has_new = take_new >= 0
+        merged[has_new] += part[take_new[has_new]]
+        sums = merged
+    return unravel(keys, sub_shape), sums
+
+
 def shift_axis(
     idx: Index,
     data: Values,
