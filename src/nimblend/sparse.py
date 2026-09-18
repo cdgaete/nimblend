@@ -31,6 +31,40 @@ type Operand = SparseArray | Scalar
 type Binary = Callable[[Any, Any], Any]
 
 
+def is_canonical(index: npt.ArrayLike, shape: Iterable[int]) -> bool:
+    """Return True when `index` ascends by raveled key with no repeated key.
+
+    `index` is an integer index matrix with one row per extent of `shape`.
+    Raises TypeError for an index that is not integer. Raises ValueError for
+    an index that is not 2-D, a row count other than the number of extents,
+    and a position outside the extent of its row.
+    """
+    index = np.asarray(index)
+    shape = tuple(int(size) for size in shape)
+    if index.dtype.kind not in "iu":
+        raise TypeError(f"index has dtype {index.dtype}; pass an integer index matrix")
+    if index.ndim != 2:
+        raise ValueError(
+            f"index has {index.ndim} dimension(s); pass a 2-D index matrix with "
+            f"one row per dimension"
+        )
+    if index.shape[0] != len(shape):
+        raise ValueError(
+            f"index has {index.shape[0]} row(s) and shape {shape} has "
+            f"{len(shape)} extent(s); pass one row per extent"
+        )
+    if index.shape[1]:
+        for axis, extent in enumerate(shape):
+            low, high = int(index[axis].min()), int(index[axis].max())
+            if low < 0 or high >= extent:
+                raise ValueError(
+                    f"row {axis} of the index has positions from {low} to "
+                    f"{high} and extent {extent}; pass positions from 0 to "
+                    f"{extent - 1}"
+                )
+    return kernel.is_canonical(index, shape)
+
+
 class SparseArray:
     """Entries in canonical order, under a coordinate per dimension.
 

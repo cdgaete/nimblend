@@ -23,9 +23,8 @@ from nimblend.coords import (
 from nimblend.dense import DenseArray
 from nimblend.domain import Domain
 from nimblend.frame import combined_dims
-from nimblend.kernel import is_canonical
 from nimblend.protocol import Array
-from nimblend.sparse import SparseArray
+from nimblend.sparse import SparseArray, is_canonical
 
 __version__ = "0.2.2"
 

@@ -359,7 +359,7 @@ buffer.array(
 
 `buffer.array(...)` does not copy. `group`, `kernel.reduce_axis`, `kernel.gather` and `kernel.shift_axis` accept a reserved slice as the `out=` destination.
 
-`SparseArray.from_canonical` builds an array from canonical buffers without a copy. The caller guarantees that the index is sorted with no key repeated. `nb.is_canonical(index, shape)` checks that condition. `from_canonical` does not check it: the check requires the ravel that the method avoids.
+`SparseArray.from_canonical` builds an array from canonical buffers without a copy. The caller guarantees that the index is sorted with no key repeated. `nb.is_canonical(index, shape)` checks that condition. It raises `TypeError` for an index that is not integer, and `ValueError` for an index that is not a 2-D matrix with one row per extent and each position inside its extent. `from_canonical` does not check it: the check requires the ravel that the method avoids.
 
 ## Performance
 

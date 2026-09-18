@@ -41,6 +41,11 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 - Operands whose shared dimensions have different labels raise `ValueError`
   with one message in every operator of both implementations: `dimension(s)
   [...] have different labels in the two arrays`.
+- `nimblend.is_canonical` checks its arguments before it reads the order. It
+  raises `TypeError` for an index that is not integer. It raises `ValueError`
+  for an index that is not 2-D, a row count other than the number of extents
+  in `shape`, and a position outside the extent of its row. It reads an index
+  given as a nested list.
 
 ### Fixed
 

@@ -35,6 +35,12 @@ def test_the_buffer_layers_own_arithmetic_is_not_on_the_public_module():
     assert nb.is_canonical is not None
 
 
+def test_is_canonical_on_the_public_module_is_not_the_kernel_function():
+    from nimblend import kernel
+
+    assert nb.is_canonical is not kernel.is_canonical
+
+
 def test_combined_dims_names_a_frame_without_an_array_to_read_it_from():
     assert nb.combined_dims(("P", "Q"), ("Q", "R")) == ("P", "Q", "R")
     with pytest.raises(ValueError, match="share no dimension"):
@@ -166,6 +172,45 @@ def test_is_canonical_answers_whether_buffers_are_in_canonical_order():
     ordered = np.array([[0, 0, 1], [0, 1, 0]], dtype=np.int32)
     assert nb.is_canonical(ordered, (2, 2))
     assert not nb.is_canonical(ordered[:, ::-1].copy(), (2, 2))
+
+
+def test_is_canonical_reads_an_integer_index_matrix_given_as_a_list():
+    assert nb.is_canonical([[0, 0, 1], [0, 1, 0]], (2, 2))
+    assert not nb.is_canonical([[1, 0], [0, 0]], (2, 2))
+
+
+def test_is_canonical_raises_for_an_index_that_is_not_two_dimensional():
+    message = "index has 1 dimension(s); pass a 2-D index matrix"
+    with pytest.raises(ValueError, match=re.escape(message)):
+        nb.is_canonical(np.array([0, 1], dtype=np.int32), (2,))
+
+
+def test_is_canonical_raises_for_an_index_that_is_not_integer():
+    message = "index has dtype float64; pass an integer index matrix"
+    with pytest.raises(TypeError, match=re.escape(message)):
+        nb.is_canonical(np.array([[0.0, 1.0]]), (2,))
+
+
+def test_is_canonical_raises_for_one_row_per_extent_missing():
+    message = "index has 1 row(s) and shape (2, 2) has 2 extent(s)"
+    with pytest.raises(ValueError, match=re.escape(message)):
+        nb.is_canonical(np.array([[0, 1]], dtype=np.int32), (2, 2))
+
+
+def test_is_canonical_raises_for_a_position_outside_its_extent():
+    # (0, 5) over (2, 3) ravels to the key of (1, 2)
+    message = (
+        "row 1 of the index has positions from 0 to 5 and extent 3; pass "
+        "positions from 0 to 2"
+    )
+    with pytest.raises(ValueError, match=re.escape(message)):
+        nb.is_canonical(np.array([[0, 1], [0, 5]], dtype=np.int32), (2, 3))
+    with pytest.raises(ValueError, match="positions from -1 to 0"):
+        nb.is_canonical(np.array([[-1, 0]], dtype=np.int32), (2,))
+
+
+def test_is_canonical_reads_an_empty_index():
+    assert nb.is_canonical(np.empty((2, 0), dtype=np.int32), (2, 2))
 
 
 def test_is_canonical_is_what_from_canonical_asks_a_caller_to_check():
