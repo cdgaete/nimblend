@@ -309,13 +309,14 @@ Every operation below is part of the `Array` protocol, and both implementations 
 | `sel({dim: label})` | The entries at the given labels, without the selected dimensions |
 | `restrict(domain)` | The entries whose coordinate over the dimensions of the domain is a member of the domain |
 | `expand(dims, coords)` | Every entry replicated over the full extent of the given dimensions |
+| `broadcast(dims, coords)` | The array over exactly `dims`, in that order, replicated over each dimension it does not have |
 | `conform(dims, labels)` | The array read at exactly `labels`, over `dims` |
 | `transpose(*dims)` | The dimensions in the order given, or reversed when none are given |
 | `rename({old: new})` | The array with its dimensions renamed |
 | `shift({dim: n})` | The entries moved along a dimension; an entry moved outside the frame is removed |
 | `roll({dim: n})` | The entries moved along a dimension, with wrapping at the ends |
 
-`expand` appends its dimensions, and the result stays canonical. `transpose` gives another order. A dimension of size `k` multiplies the number of entries by `k`. The caller requests replication explicitly, and no operator performs it implicitly. `conform` takes each label once, and a repeated label raises `ValueError`.
+`expand` appends its dimensions, and the result stays canonical. `transpose` gives another order. `broadcast` calls `expand` for the dimensions of `dims` the array does not have, then `transpose` to the order of `dims`, and reads `coords` only for those dimensions. A dimension of size `k` multiplies the number of entries by `k`. The caller requests replication explicitly, and no operator performs it implicitly. `conform` takes each label once, and a repeated label raises `ValueError`.
 
 **Reading the entries.** `coordinates(dims)` and `values()` return copies of the entries, not the buffers of the array. `domain(dims)` returns the distinct coordinates. `to_dense(fill)` returns a grid. `nnz`, `dims`, `shape` and `coords` describe the frame.
 

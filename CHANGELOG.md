@@ -13,6 +13,14 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ## Unreleased
 
+### Added
+
+- `SparseArray.broadcast(dims, coords)` and `DenseArray.broadcast(dims,
+  coords)` return the array over exactly `dims`, in that order, replicated
+  across each dimension of `dims` it does not have. They raise `ValueError`
+  for a dimension of the array not in `dims`, and for a dimension without a
+  coordinate. The `Array` protocol includes `broadcast`.
+
 ### Changed
 
 - `group` takes `coord=` and `start=` in place of `offset=`. `coord` is the

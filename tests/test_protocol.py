@@ -36,6 +36,7 @@ def test_the_protocol_names_every_member_the_contract_requires():
         "values",
         "restrict",
         "expand",
+        "broadcast",
         "group",
         "as_empty",
         "as_unknown",

@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import numpy.typing as npt
 
-from nimblend import display, kernel
+from nimblend import display, frame, kernel
 from nimblend.coords import (
     Coord,
     StoredCoord,
@@ -250,6 +250,20 @@ class SparseArray:
             index, data, out_coords, self.dims + dims, self.absence
         )
 
+    def broadcast(
+        self, dims: Iterable[str], coords: Mapping[str, Coord]
+    ) -> "SparseArray":
+        """Return the array over exactly `dims`, in that order.
+
+        The array is replicated across each dimension of `dims` it does not
+        have, with the coordinate in `coords` for that dimension. `coords` is
+        read only for those dimensions. An array over exactly `dims` is
+        returned as it is. Raises ValueError for a dimension of the array not
+        in `dims`, a repeated dimension, and a dimension of `dims` that neither
+        the array nor `coords` contains.
+        """
+        return frame.broadcast(self, dims, coords)
+
     @property
     def nnz(self) -> int:
         """Return the number of entries."""
@@ -352,15 +366,7 @@ class SparseArray:
                 f"one array declares absence {self.absence!r} and the other "
                 f"{other.absence!r}; convert one with as_empty() or as_unknown()"
             )
-        return self._widen(dims, other), other._widen(dims, self)
-
-    def _widen(self, dims: tuple[str, ...], other: "SparseArray") -> "SparseArray":
-        """Return this array over `dims`, expanded by the dimensions of `other`."""
-        missing = tuple(d for d in dims if d not in self.dims)
-        if not missing:
-            return self if self.dims == dims else self.transpose(*dims)
-        widened = self.expand(missing, {d: other.coords[d] for d in missing})
-        return widened.transpose(*dims)
+        return self.broadcast(dims, other.coords), other.broadcast(dims, self.coords)
 
     def _same_frame(self, other: "SparseArray") -> None:
         if self.dims != other.dims:
