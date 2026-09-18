@@ -245,7 +245,7 @@ A domain is an ordered set, and it defines a numbering of its members. The membe
 shared.as_coord(start=5)  # SubsetCoord(1 of (3, 2), start=5)
 ```
 
-**Effect.** A domain supports intersection, union and difference, and numbers its members. A consumer finds which members remain after an operation, and gives them positions along a new dimension.
+**Effect.** A domain supports intersection, union, difference and symmetric difference, and numbers its members. A consumer finds which members remain after an operation, and gives them positions along a new dimension.
 
 ### 6. One result from many blocks
 

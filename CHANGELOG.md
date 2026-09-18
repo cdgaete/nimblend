@@ -26,6 +26,9 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
   of the kernel function `weighted_sum_axis` and allocates no temporary of the
   size of the array. Under absence "unknown" they require `skip=True`. The
   `Array` protocol includes `weighted_sum`.
+- `Domain.symmetric_difference(other)` returns the members that exactly one of
+  the two domains contains. It raises `ValueError` for domains with different
+  frames or labels, as `difference` does.
 
 ### Changed
 

@@ -299,6 +299,16 @@ class Domain:
         at = kernel.lookup(other.codes, self.codes)
         return Domain._over(self.codes[at < 0], self.dims, self.coords, self.shape)
 
+    def symmetric_difference(self, other: "Domain") -> "Domain":
+        """Return the members that exactly one of the two domains contains.
+
+        Raises ValueError for domains with different frames or labels.
+        """
+        self._same_frame(other)
+        codes, take_a, take_b = kernel.align(self.codes, other.codes, "union")
+        keep = (take_a < 0) | (take_b < 0)
+        return Domain._over(codes[keep], self.dims, self.coords, self.shape)
+
     def positions_of(self, array: "SparseArray") -> Positions:
         """Return the position of each entry of `array` here, -1 where absent.
 

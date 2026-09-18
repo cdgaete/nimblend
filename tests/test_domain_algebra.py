@@ -171,6 +171,57 @@ def test_difference_refuses_a_domain_over_different_labels():
         domain([0]).difference(other)
 
 
+def test_symmetric_difference_keeps_the_members_exactly_one_domain_has():
+    got = domain([0, 2, 4]).symmetric_difference(domain([2, 5]))
+    assert list(got.codes) == [0, 4, 5]
+    assert got.dims == ("x", "y")
+
+
+def test_symmetric_difference_of_equal_domains_leaves_nothing():
+    assert domain([0, 2]).symmetric_difference(domain([0, 2])).size == 0
+
+
+def test_symmetric_difference_with_an_empty_domain_keeps_every_member():
+    empty = domain([])
+    assert list(domain([1, 3]).symmetric_difference(empty).codes) == [1, 3]
+    assert list(empty.symmetric_difference(domain([1, 3])).codes) == [1, 3]
+
+
+@pytest.mark.parametrize("seed", range(5))
+def test_symmetric_difference_is_the_union_of_both_differences(seed):
+    rng = np.random.default_rng(seed)
+    a = domain(np.flatnonzero(rng.random(6) < 0.5))
+    b = domain(np.flatnonzero(rng.random(6) < 0.5))
+    wanted = a.difference(b).union(b.difference(a))
+    assert list(a.symmetric_difference(b).codes) == list(wanted.codes)
+    assert list(b.symmetric_difference(a).codes) == list(wanted.codes)
+
+
+def test_symmetric_difference_refuses_a_domain_over_different_labels():
+    other = Domain(
+        np.array([0], dtype=np.int64),
+        ("x", "y"),
+        {
+            "x": StoredCoord(np.array(["p", "q"])),
+            "y": StoredCoord(np.array([10, 20, 30])),
+        },
+        (2, 3),
+    )
+    with pytest.raises(ValueError, match="different labels"):
+        domain([0]).symmetric_difference(other)
+
+
+def test_symmetric_difference_refuses_a_domain_over_another_frame():
+    other = Domain(
+        np.array([0]),
+        ("y", "x"),
+        {"x": StoredCoord(np.array(["a", "b"])), "y": StoredCoord(np.array([1, 2, 3]))},
+        (3, 2),
+    )
+    with pytest.raises(ValueError, match="combine domains over the same frame"):
+        domain([0]).symmetric_difference(other)
+
+
 def test_full_carries_every_coordinate_of_the_product():
     got = Domain.full(("x", "y"), coords_xy())
     assert got.size == 6
