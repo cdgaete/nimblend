@@ -194,16 +194,17 @@ def reduction_policy(
         )
 
 
-def some_values(array: Any, op: str, fill: float | None) -> None:
+def some_values(array: Any, op: str, fill: float | None, entries: bool) -> None:
     """Raise ValueError for `min`, `max` or `mean` of a whole array of no values.
 
-    Without `fill` the values are the entries. With `fill` every coordinate of
-    the frame has a value. A `sum` over no values is 0.0 and does not raise.
+    `entries` is True for an array with one entry or more. Without `fill` the
+    values are the entries. With `fill` every coordinate of the frame has a
+    value. A `sum` over no values is 0.0 and does not raise.
     """
     if op == "sum":
         return
-    count = array.nnz if fill is None else span(array.shape)
-    if not count:
+    has_values = entries if fill is None else span(array.shape) > 0
+    if not has_values:
         raise ValueError(
             f"{op}() over an array with no values has no result; pass "
             f"fill=<value> or reduce an array with entries"

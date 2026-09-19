@@ -532,7 +532,7 @@ class SparseArray:
             known_dims(op, (dim,), self.dims)
         frame.reduction_policy(self, skip, fill)
         if dim is None:
-            frame.some_values(self, op, fill)
+            frame.some_values(self, op, fill, self.nnz > 0)
             dense = self.data if fill is None else self._filled(fill)
             return float(getattr(np, op)(dense))
         axis = self.dims.index(dim)

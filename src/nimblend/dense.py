@@ -555,9 +555,9 @@ class DenseArray:
         if dim is not None:
             known_dims(op, (dim,), self.dims)
         frame.reduction_policy(self, skip, fill)
-        if dim is None:
-            frame.some_values(self, op, fill)
         present = self.present
+        if dim is None:
+            frame.some_values(self, op, fill, bool(present.any()))
         if fill is None:
             filled = np.where(present, self.data, self._IDENTITY[op])
         else:
