@@ -61,6 +61,17 @@ def unravel(keys: Positions, shape: Sequence[int]) -> Index:
     return out
 
 
+def _run_starts(keys: Keys) -> npt.NDArray[np.bool_]:
+    """Return True at the first position of each run of equal keys.
+
+    `keys` ascends. Raises IndexError for an empty array.
+    """
+    first = np.empty(keys.size, dtype=bool)
+    first[0] = True
+    np.not_equal(keys[1:], keys[:-1], out=first[1:])
+    return first
+
+
 def distinct(keys: Keys) -> Keys:
     """Return the sorted unique keys, in one pass when the keys do not descend.
 
@@ -72,9 +83,7 @@ def distinct(keys: Keys) -> Keys:
     if bool(np.all(step > 0)):
         return keys
     if bool(np.all(step >= 0)):
-        first = np.empty(keys.size, dtype=bool)
-        first[0] = True
-        np.not_equal(keys[1:], keys[:-1], out=first[1:])
+        first = _run_starts(keys)
         return keys[first]
     return np.unique(keys)
 
@@ -144,9 +153,7 @@ def canonicalize(
         idx = idx.copy()
         data = data.copy()
 
-    first = np.empty(keys.size, dtype=bool)
-    first[0] = True
-    np.not_equal(keys[1:], keys[:-1], out=first[1:])
+    first = _run_starts(keys)
     if first.all():
         return _emit(idx, data, out)
 
@@ -285,9 +292,7 @@ def reduce_axis(
     del rows
     order = np.argsort(keys, kind="stable")
     keys = keys[order]
-    first = np.empty(keys.size, dtype=bool)
-    first[0] = True
-    np.not_equal(keys[1:], keys[:-1], out=first[1:])
+    first = _run_starts(keys)
     del keys
     starts = np.flatnonzero(first)
     del first
@@ -303,9 +308,7 @@ def reduce_axis(
 
 def _sum_runs(keys: Keys, values: Values) -> tuple[Keys, Values]:
     """Return the distinct keys of sorted `keys` and the sum of each run."""
-    first = np.empty(keys.size, dtype=bool)
-    first[0] = True
-    np.not_equal(keys[1:], keys[:-1], out=first[1:])
+    first = _run_starts(keys)
     starts = np.flatnonzero(first)
     return keys[starts], np.add.reduceat(values, starts)
 
