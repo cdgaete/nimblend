@@ -436,9 +436,7 @@ class SparseArray:
         )
         return SparseArray(index, data, coords, self.dims + extra, self.absence)
 
-    def __rmul__(
-        self, other: "Operand | DenseArray"
-    ) -> "SparseArray | tuple[str, ...]":
+    def __rmul__(self, other: "Operand | DenseArray") -> "SparseArray":
         return self.__mul__(other)
 
     def __truediv__(self, other: "Operand | DenseArray") -> "SparseArray":

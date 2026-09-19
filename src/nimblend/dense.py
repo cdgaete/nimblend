@@ -467,7 +467,7 @@ class DenseArray:
             return self._overlap_mul(other)
         frame.disjoint_dims(self.dims, other.dims)
 
-    def __rmul__(self, other: Operand) -> Result | tuple[str, ...]:
+    def __rmul__(self, other: Operand) -> Result:
         if isinstance(other, SparseArray):
             return other * self._sparse()
         return self.__mul__(other)
