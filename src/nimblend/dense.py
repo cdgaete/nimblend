@@ -14,12 +14,11 @@ from nimblend.coords import (
     distinct_labels,
     known_dims,
     require_coords,
-    same_labels,
     unique_dims,
 )
 from nimblend.domain import Domain
 from nimblend.frame import combined_dims
-from nimblend.protocol import ABSENCE, same_absence
+from nimblend.protocol import ABSENCE
 from nimblend.sparse import SparseArray
 
 type Grid = npt.NDArray[np.float64]
@@ -522,13 +521,8 @@ class DenseArray:
         The shared dimensions align and the others multiply out. The result is
         over the dimensions of this array, then those only `other` has.
         """
-        shared = tuple(d for d in self.dims if d in other.dims)
-        extra = tuple(d for d in other.dims if d not in self.dims)
-        same_absence(self, other)
-        same_labels(shared, self.coords, other.coords)
+        _, extra, coords = frame.overlap_dims(self, other)
         dims = self.dims + extra
-        coords = dict(self.coords)
-        coords.update({d: other.coords[d] for d in extra})
         return self._product_over(other, dims, coords)
 
     def __truediv__(self, other: Operand) -> Result:

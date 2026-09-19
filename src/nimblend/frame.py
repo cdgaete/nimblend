@@ -58,6 +58,25 @@ def nested_operands(left: Any, right: Any) -> tuple[Any, Any]:
     return narrow, wide
 
 
+def overlap_dims(
+    left: Any, right: Any
+) -> tuple[tuple[str, ...], tuple[str, ...], dict[str, Coord]]:
+    """Return the shared dimensions, the extra dimensions and the coordinates.
+
+    `extra` is the dimensions of `right` that `left` does not have. `coords`
+    is `left`'s coordinates with `right`'s coordinates of `extra` added.
+    Raises ValueError for different absence, or different labels on a
+    shared dimension.
+    """
+    same_absence(left, right)
+    shared = tuple(d for d in left.dims if d in right.dims)
+    extra = tuple(d for d in right.dims if d not in left.dims)
+    same_labels(shared, left.coords, right.coords)
+    coords = dict(left.coords)
+    coords.update({d: right.coords[d] for d in extra})
+    return shared, extra, coords
+
+
 def axes_of(array: Any, dims: Iterable[str], what: str) -> list[int]:
     """Return the axis of each dimension of `dims` in `array`.
 

@@ -427,10 +427,7 @@ class SparseArray:
         only `other` has. An entry with no pair in the other operand is
         dropped.
         """
-        same_absence(self, other)
-        shared = tuple(d for d in self.dims if d in other.dims)
-        extra = tuple(d for d in other.dims if d not in self.dims)
-        same_labels(shared, self.coords, other.coords)
+        shared, extra, coords = frame.overlap_dims(self, other)
         mine = [self.dims.index(d) for d in shared]
         theirs = [other.dims.index(d) for d in shared]
         shape = tuple(self.shape[a] for a in mine)
@@ -443,8 +440,6 @@ class SparseArray:
             kernel.ravel(other.index[theirs], shape),
             [other.dims.index(d) for d in extra],
         )
-        coords = dict(self.coords)
-        coords.update({d: other.coords[d] for d in extra})
         return SparseArray(index, data, coords, self.dims + extra, self.absence)
 
     def __rmul__(
