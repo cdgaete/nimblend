@@ -222,7 +222,11 @@ def require_coords(dims: Iterable[str], coords: Mapping[str, Coord]) -> None:
 
 
 def same_labels(
-    dims: Iterable[str], left: Mapping[str, Coord], right: Mapping[str, Coord]
+    dims: Iterable[str],
+    left: Mapping[str, Coord],
+    right: Mapping[str, Coord],
+    operands: str = "arrays",
+    action: str = "conform one to the other first",
 ) -> None:
     """Raise ValueError for a dimension of `dims` with unequal coordinates.
 
@@ -231,8 +235,8 @@ def same_labels(
     differing = [d for d in dims if left[d] != right[d]]
     if differing:
         raise ValueError(
-            f"dimension(s) {differing} have different labels in the two arrays; "
-            f"conform one to the other first"
+            f"dimension(s) {differing} have different labels in the two "
+            f"{operands}; {action}"
         )
 
 

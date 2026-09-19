@@ -15,6 +15,7 @@ from nimblend.coords import (
     label_positions,
     numbered_from,
     require_coords,
+    same_labels,
     unique_dims,
 )
 from nimblend.kernel import Index, Keys, Positions
@@ -224,12 +225,13 @@ class Domain:
                 f"{other.dims} of shape {other.shape} differ in frame; combine "
                 f"domains over the same frame"
             )
-        differing = [d for d in self.dims if self.coords[d] != other.coords[d]]
-        if differing:
-            raise ValueError(
-                f"dimension(s) {differing} have different labels in the two "
-                f"domains; combine domains over the same labels"
-            )
+        same_labels(
+            self.dims,
+            self.coords,
+            other.coords,
+            operands="domains",
+            action="combine domains over the same labels",
+        )
 
     def intersect(self, other: "Domain") -> "Domain":
         """Return the members that both domains contain.
