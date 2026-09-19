@@ -271,9 +271,7 @@ class SparseArray:
         ValueError.
         """
         if self.absence == "unknown" and fill is None:
-            total = 1
-            for size in self.shape:
-                total *= size
+            total = kernel.span(self.shape)
             if self.nnz < total:
                 raise ValueError(
                     f"absence is 'unknown' and the array has no value at "

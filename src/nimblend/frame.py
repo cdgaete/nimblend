@@ -11,7 +11,7 @@ import numpy as np
 import numpy.typing as npt
 
 from nimblend.coords import Coord, known_dims, same_labels, unique_dims
-from nimblend.kernel import Values
+from nimblend.kernel import Values, span
 from nimblend.protocol import same_absence
 
 
@@ -122,7 +122,7 @@ def some_values(array: Any, op: str, fill: float | None) -> None:
     """
     if op == "sum":
         return
-    count = array.nnz if fill is None else int(np.prod(array.shape))
+    count = array.nnz if fill is None else span(array.shape)
     if not count:
         raise ValueError(
             f"{op}() over an array with no values has no result; pass "

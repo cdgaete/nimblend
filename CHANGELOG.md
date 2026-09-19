@@ -54,6 +54,9 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ### Fixed
 
+- `min()`, `max()` and `mean()` with `fill=`, and `to_dense()` under absence
+  "unknown", raise `OverflowError` for a shape with more cells than the int64
+  range.
 - `min()`, `max()` and `mean()` over the whole of an array with no values
   raise `ValueError` in both implementations. `sum()` over no values returns
   0.0. With `fill=` every coordinate of the frame has a value.
