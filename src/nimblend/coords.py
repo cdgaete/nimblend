@@ -116,10 +116,7 @@ class ProductCoord:
         self.start = int(start)
 
     def __len__(self) -> int:
-        total = 1
-        for size in self.sizes:
-            total *= size
-        return total
+        return kernel.span(self.sizes)
 
     def __repr__(self) -> str:
         return f"ProductCoord(sizes={self.sizes}, start={self.start})"

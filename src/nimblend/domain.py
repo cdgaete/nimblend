@@ -152,14 +152,13 @@ class Domain:
     def full(cls, dims: Iterable[str], coords: Mapping[str, Coord]) -> "Domain":
         """Return the domain of every cell in the product of the extents of `dims`.
 
-        Raises ValueError for a dimension without a coordinate.
+        Raises ValueError for a dimension without a coordinate. Raises
+        OverflowError when the product of the extents exceeds the int64 range.
         """
         dims = tuple(dims)
         require_coords(dims, coords)
         shape = tuple(len(coords[d]) for d in dims)
-        total = 1
-        for size in shape:
-            total *= size
+        total = kernel.span(shape)
         return cls._over(np.arange(total, dtype=np.int64), dims, coords, shape)
 
     @property
@@ -172,11 +171,10 @@ class Domain:
         """Return True when the domain contains every cell of its shape.
 
         For a full domain, values in member order reshape into `shape`.
+        Raises OverflowError when the product of the extents exceeds the
+        int64 range.
         """
-        span = 1
-        for size in self.shape:
-            span *= size
-        return self.size == span
+        return self.size == kernel.span(self.shape)
 
     def __len__(self) -> int:
         return self.size

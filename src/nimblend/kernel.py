@@ -336,17 +336,15 @@ def weighted_sum_axis(
     sub_shape = [shape[a] for a in kept]
     if data.size == 0:
         return np.empty((len(kept), 0), dtype=np.int32), np.empty(0, np.float64)
-    span = 1
-    for size in sub_shape:
-        span *= int(size)
+    cells = span(sub_shape)
     slices = [slice(at, at + block) for at in range(0, data.size, block)]
-    if span <= data.size:
-        sums = np.zeros(span, dtype=np.float64)
-        seen = np.zeros(span, dtype=bool)
+    if cells <= data.size:
+        sums = np.zeros(cells, dtype=np.float64)
+        seen = np.zeros(cells, dtype=bool)
         for at in slices:
             part_keys = ravel(idx[kept, at], sub_shape)
             part = data[at] * weights[idx[axis, at]]
-            sums += np.bincount(part_keys, weights=part, minlength=span)
+            sums += np.bincount(part_keys, weights=part, minlength=cells)
             seen[part_keys] = True
         keys = np.flatnonzero(seen)
         return unravel(keys, sub_shape), sums[keys]
