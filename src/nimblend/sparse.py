@@ -409,19 +409,9 @@ class SparseArray:
         An entry of the wider operand is dropped where the narrower operand has
         no entry at its shared coordinate.
         """
-        narrow, wide = (self, other)
-        if len(narrow.dims) > len(wide.dims):
-            narrow, wide = wide, narrow
-        if not set(narrow.dims) <= set(wide.dims):
-            raise ValueError(
-                f"dimensions {narrow.dims} are not a subset of {wide.dims}; pass "
-                f"operands whose frames nest"
-            )
-        same_absence(narrow, wide)
+        narrow, wide = frame.nested_operands(self, other)
         axes = [wide.dims.index(d) for d in narrow.dims]
         shared_shape = tuple(wide.shape[a] for a in axes)
-        same_extents(narrow.dims, narrow.shape, shared_shape)
-        same_labels(narrow.dims, narrow.coords, wide.coords)
         probe = kernel.ravel(wide.index[axes], shared_shape)
         take = kernel.lookup(kernel.ravel(narrow.index, narrow.shape), probe)
         index, data = kernel.multiply_lookup(wide.index, wide.data, narrow.data, take)

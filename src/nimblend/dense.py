@@ -14,7 +14,6 @@ from nimblend.coords import (
     distinct_labels,
     known_dims,
     require_coords,
-    same_extents,
     same_labels,
     unique_dims,
 )
@@ -514,18 +513,7 @@ class DenseArray:
 
         The result is over the wider frame in either operand order.
         """
-        narrow, wide = (self, other)
-        if len(narrow.dims) > len(wide.dims):
-            narrow, wide = wide, narrow
-        if not set(narrow.dims) <= set(wide.dims):
-            raise ValueError(
-                f"dimensions {narrow.dims} are not a subset of {wide.dims}; pass "
-                f"operands whose frames nest"
-            )
-        same_absence(narrow, wide)
-        shared_shape = tuple(wide.shape[wide.dims.index(d)] for d in narrow.dims)
-        same_extents(narrow.dims, narrow.shape, shared_shape)
-        same_labels(narrow.dims, narrow.coords, wide.coords)
+        narrow, wide = frame.nested_operands(self, other)
         return wide._product_over(narrow, wide.dims, wide.coords)
 
     def _overlap_mul(self, other: "DenseArray") -> "DenseArray":

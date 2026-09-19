@@ -10,7 +10,7 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 
-from nimblend.coords import Coord, known_dims, same_labels, unique_dims
+from nimblend.coords import Coord, known_dims, same_extents, same_labels, unique_dims
 from nimblend.kernel import Values, span
 from nimblend.protocol import same_absence
 
@@ -34,6 +34,28 @@ def combined_dims(left: tuple[str, ...], right: tuple[str, ...]) -> tuple[str, .
         f"frames {left} and {right} share no dimension; pass operands that share "
         f"a dimension"
     )
+
+
+def nested_operands(left: Any, right: Any) -> tuple[Any, Any]:
+    """Return the operands ordered narrower, wider, checked to broadcast.
+
+    Raises ValueError for dimensions of the narrower operand that are not a
+    subset of the wider one, for different absence, for a shared dimension
+    of differing extent, and for a shared dimension with different labels.
+    """
+    narrow, wide = (left, right)
+    if len(narrow.dims) > len(wide.dims):
+        narrow, wide = wide, narrow
+    if not set(narrow.dims) <= set(wide.dims):
+        raise ValueError(
+            f"dimensions {narrow.dims} are not a subset of {wide.dims}; pass "
+            f"operands whose frames nest"
+        )
+    same_absence(narrow, wide)
+    shared_shape = tuple(wide.shape[wide.dims.index(d)] for d in narrow.dims)
+    same_extents(narrow.dims, narrow.shape, shared_shape)
+    same_labels(narrow.dims, narrow.coords, wide.coords)
+    return narrow, wide
 
 
 def axes_of(array: Any, dims: Iterable[str], what: str) -> list[int]:
