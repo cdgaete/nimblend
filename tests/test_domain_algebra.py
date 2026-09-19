@@ -302,6 +302,16 @@ def test_transpose_reorders_the_members_into_the_new_codes_order():
     assert got.coordinates().tolist() == [[0, 2], [1, 0]]
 
 
+def test_transpose_with_no_argument_reverses_the_dimensions():
+    got = domain([2, 3]).transpose()
+    assert got.dims == ("y", "x")
+    assert got.shape == (3, 2)
+    assert (
+        got.coordinates().tolist()
+        == domain([2, 3]).transpose("y", "x").coordinates().tolist()
+    )
+
+
 def test_transpose_back_again_is_the_domain_it_started_from():
     held = domain([0, 2, 4])
     assert list(held.transpose("y", "x").transpose("x", "y").codes) == list(held.codes)

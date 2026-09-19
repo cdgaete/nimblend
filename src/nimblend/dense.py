@@ -1,6 +1,5 @@
 """A dense labeled array, with absence stored as NaN or as a boolean mask."""
 
-from collections import Counter
 from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
@@ -289,11 +288,7 @@ class DenseArray:
         Without arguments the order is reversed. Raises ValueError unless
         `dims` contains each dimension once.
         """
-        dims = tuple(reversed(self.dims)) if not dims else tuple(dims)
-        if Counter(dims) != Counter(self.dims):
-            raise ValueError(
-                f"transpose requires each dimension of {self.dims} once; got {dims}"
-            )
+        dims = frame.transposed_dims(self.dims, dims)
         axes = frame.axes_of(self, dims, "transpose")
         mask = None if self.mask is None else np.transpose(self.mask, axes)
         return self._like(np.transpose(self.data, axes), mask, dims)

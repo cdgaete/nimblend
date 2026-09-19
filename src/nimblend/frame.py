@@ -4,6 +4,7 @@ Each function takes a `SparseArray` or a `DenseArray` and reads only the
 members of the `Array` protocol.
 """
 
+from collections import Counter
 from collections.abc import Iterable, Mapping
 from typing import Any, NoReturn
 
@@ -90,6 +91,20 @@ def axes_of(array: Any, dims: Iterable[str], what: str) -> list[int]:
     dims = tuple(dims)
     known_dims(what, dims, array.dims)
     return [array.dims.index(name) for name in dims]
+
+
+def transposed_dims(dims: tuple[str, ...], given: tuple[str, ...]) -> tuple[str, ...]:
+    """Return `given`, or `dims` reversed when `given` is empty.
+
+    Raises ValueError unless `given` contains each dimension of `dims` once.
+    """
+    if not given:
+        return tuple(reversed(dims))
+    if Counter(given) != Counter(dims):
+        raise ValueError(
+            f"transpose requires each dimension of {dims} once; got {given}"
+        )
+    return given
 
 
 def broadcast(array: Any, dims: Iterable[str], coords: Mapping[str, Coord]) -> Any:

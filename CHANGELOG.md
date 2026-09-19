@@ -37,6 +37,8 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ### Changed
 
+- `Domain.transpose()` with no arguments returns the domain over the
+  reversed dimensions.
 - `group` takes `coord=` and `start=` in place of `offset=`. `coord` is the
   coordinate of the new dimension and defaults to the domain numbered from 0.
   An entry is placed at the rank of its member plus `start`. `group` raises

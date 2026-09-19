@@ -1,6 +1,5 @@
 """A sparse labeled array that stores only its entries, in canonical order."""
 
-from collections import Counter
 from collections.abc import Callable, Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
@@ -298,11 +297,7 @@ class SparseArray:
         Without arguments the order is reversed. Raises ValueError unless
         `dims` contains each dimension once.
         """
-        dims = tuple(reversed(self.dims)) if not dims else tuple(dims)
-        if Counter(dims) != Counter(self.dims):
-            raise ValueError(
-                f"transpose requires each dimension of {self.dims} once; got {dims}"
-            )
+        dims = frame.transposed_dims(self.dims, dims)
         order = [self.dims.index(d) for d in dims]
         return SparseArray(
             self.index[order], self.data, self.coords, dims, self.absence

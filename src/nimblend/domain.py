@@ -1,6 +1,5 @@
 """A set of coordinates over a tuple of dimensions."""
 
-from collections import Counter
 from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
@@ -18,6 +17,7 @@ from nimblend.coords import (
     same_labels,
     unique_dims,
 )
+from nimblend.frame import transposed_dims
 from nimblend.kernel import Index, Keys, Positions
 
 if TYPE_CHECKING:
@@ -350,13 +350,10 @@ class Domain:
     def transpose(self, *dims: str) -> "Domain":
         """Return the same members over the dimensions in the given order.
 
-        Raises ValueError unless `dims` contains each dimension once.
+        Without arguments the order is reversed. Raises ValueError unless
+        `dims` contains each dimension once.
         """
-        dims = tuple(dims)
-        if Counter(dims) != Counter(self.dims):
-            raise ValueError(
-                f"transpose requires each dimension of {self.dims} once; got {dims}"
-            )
+        dims = transposed_dims(self.dims, dims)
         if dims == self.dims:
             return self
         axes = [self.dims.index(name) for name in dims]
