@@ -35,6 +35,20 @@ def test_crossing_an_empty_block_is_empty():
     assert out_data.size == 0
 
 
+def test_crossing_an_empty_block_over_a_large_size_does_not_build_the_grid(
+    monkeypatch,
+):
+    def boom(*_args, **_kwargs):
+        raise AssertionError("unravel is called")
+
+    monkeypatch.setattr(kernel, "unravel", boom)
+    out_idx, out_data = kernel.cross(
+        np.empty((1, 0), dtype=np.int32), np.empty(0), (40_000_000,)
+    )
+    assert out_idx.shape == (2, 0)
+    assert out_data.size == 0
+
+
 def test_cross_keys_pairs_each_left_key_with_each_right_key():
     left = np.array([1, 4], dtype=np.int64)
     right = np.array([0, 2], dtype=np.int64)

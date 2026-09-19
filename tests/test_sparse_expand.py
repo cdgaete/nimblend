@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from nimblend import kernel
-from nimblend.coords import StoredCoord
+from nimblend.coords import ProductCoord, StoredCoord
 from nimblend.sparse import SparseArray
 
 
@@ -73,3 +73,11 @@ def test_expanding_an_empty_array_leaves_it_empty():
     got = arr.expand(("z",), {"z": StoredCoord(np.array([1, 2]))})
     assert got.nnz == 0
     assert got.dims == ("x", "y", "z")
+
+
+def test_expanding_an_empty_array_over_a_shape_beyond_the_int64_range():
+    arr = block([[0.0]], {"x": np.array(["a"]), "y": np.array([0])})
+    dims = ("a", "b", "c", "d", "e")
+    coords = {d: ProductCoord((2**30,)) for d in dims}
+    with pytest.raises(OverflowError, match="exceeds the int64 range"):
+        arr.expand(dims, coords)

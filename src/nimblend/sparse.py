@@ -225,7 +225,8 @@ class SparseArray:
         The new dimensions are appended; `transpose` reorders them. A dimension
         of extent `k` multiplies the entry count by `k`. Raises ValueError for
         a dimension the array already has or one without a coordinate, and
-        for a repeated dimension.
+        for a repeated dimension. Raises OverflowError when the product of the
+        extents exceeds the int64 range.
         """
         dims = unique_dims(dims)
         clash = [name for name in dims if name in self.dims]
@@ -235,6 +236,7 @@ class SparseArray:
                 f"it does not have"
             )
         require_coords(dims, coords)
+        kernel.span(self.shape + tuple(int(len(coords[name])) for name in dims))
         index, data = kernel.cross(
             self.index, self.data, [len(coords[name]) for name in dims]
         )

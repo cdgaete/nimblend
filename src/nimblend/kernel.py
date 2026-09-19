@@ -500,12 +500,13 @@ def cross(idx: Index, data: Values, sizes: Sequence[int]) -> Block:
     """Return each entry repeated once per cell of `sizes`, those positions appended.
 
     The new rows follow the rows of `idx`, and the cells of `sizes` are in C
-    order. A canonical block returns a canonical block.
+    order. A canonical block returns a canonical block. Raises OverflowError
+    when the number of cells of `sizes` exceeds the int64 range.
     """
-    total = 1
-    for size in sizes:
-        total *= int(size)
+    total = span(sizes)
     held = idx.shape[0]
+    if data.size == 0:
+        return np.empty((held + len(sizes), 0), dtype=np.int32), data
     count = data.size
     index = np.empty((held + len(sizes), count * total), dtype=np.int32)
     for axis in range(held):
