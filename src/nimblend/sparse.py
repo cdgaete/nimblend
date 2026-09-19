@@ -20,7 +20,6 @@ from nimblend.coords import (
     unique_dims,
 )
 from nimblend.domain import Domain
-from nimblend.frame import combined_dims
 from nimblend.protocol import ABSENCE, same_absence
 
 if TYPE_CHECKING:
@@ -390,7 +389,7 @@ class SparseArray:
     def __rsub__(self, other: Scalar) -> "SparseArray":
         return self._scalar(other, lambda a, b: b - a)
 
-    def __mul__(self, other: "Operand | DenseArray") -> "SparseArray | tuple[str, ...]":
+    def __mul__(self, other: "Operand | DenseArray") -> "SparseArray":
         if isinstance(other, (int, float, np.number)):
             return self._scalar(other, np.multiply)
         if not isinstance(other, SparseArray):
@@ -401,7 +400,7 @@ class SparseArray:
             return self._broadcast_mul(other)
         if set(self.dims) & set(other.dims):
             return self._overlap_mul(other)
-        return combined_dims(self.dims, other.dims)
+        frame.disjoint_dims(self.dims, other.dims)
 
     def _broadcast_mul(self, other: "SparseArray") -> "SparseArray":
         """Return the product of two arrays with nested frames, over the wider.

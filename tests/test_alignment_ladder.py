@@ -3,8 +3,7 @@ import itertools
 import numpy as np
 import pytest
 
-from nimblend import DenseArray, SparseArray
-from nimblend.sparse import combined_dims
+from nimblend import DenseArray, SparseArray, combined_dims
 
 LABELS = {n: np.array([f"{n}{i}" for i in range(2)]) for n in "PQR"}
 

@@ -17,7 +17,6 @@ from nimblend.coords import (
     unique_dims,
 )
 from nimblend.domain import Domain
-from nimblend.frame import combined_dims
 from nimblend.protocol import ABSENCE
 from nimblend.sparse import SparseArray
 
@@ -449,7 +448,7 @@ class DenseArray:
         with np.errstate(divide="ignore", invalid="ignore"):
             return self._scalar(other, np.power)
 
-    def __mul__(self, other: Operand) -> Result | tuple[str, ...]:
+    def __mul__(self, other: Operand) -> Result:
         """Return the product of this array and `other`.
 
         A coordinate absent from either operand is absent from the product. A
@@ -471,7 +470,7 @@ class DenseArray:
             return self._broadcast_mul(other)
         if set(self.dims) & set(other.dims):
             return self._overlap_mul(other)
-        return combined_dims(self.dims, other.dims)
+        frame.disjoint_dims(self.dims, other.dims)
 
     def __rmul__(self, other: Operand) -> Result | tuple[str, ...]:
         if isinstance(other, SparseArray):

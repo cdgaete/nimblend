@@ -5,7 +5,7 @@ members of the `Array` protocol.
 """
 
 from collections.abc import Iterable, Mapping
-from typing import Any
+from typing import Any, NoReturn
 
 import numpy as np
 import numpy.typing as npt
@@ -13,6 +13,14 @@ import numpy.typing as npt
 from nimblend.coords import Coord, known_dims, same_extents, same_labels, unique_dims
 from nimblend.kernel import Values, span
 from nimblend.protocol import same_absence
+
+
+def disjoint_dims(left: tuple[str, ...], right: tuple[str, ...]) -> NoReturn:
+    """Raise ValueError for two frames that share no dimension."""
+    raise ValueError(
+        f"frames {left} and {right} share no dimension; pass operands that share "
+        f"a dimension"
+    )
 
 
 def combined_dims(left: tuple[str, ...], right: tuple[str, ...]) -> tuple[str, ...]:
@@ -30,10 +38,7 @@ def combined_dims(left: tuple[str, ...], right: tuple[str, ...]) -> tuple[str, .
         return left
     if set(left) & set(right):
         return left + tuple(d for d in right if d not in left)
-    raise ValueError(
-        f"frames {left} and {right} share no dimension; pass operands that share "
-        f"a dimension"
-    )
+    disjoint_dims(left, right)
 
 
 def nested_operands(left: Any, right: Any) -> tuple[Any, Any]:
