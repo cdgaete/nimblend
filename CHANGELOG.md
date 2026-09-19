@@ -56,6 +56,9 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ### Fixed
 
+- A shape with an extent of 0 has 0 cells in every position of that extent.
+  `SparseArray.domain` returns the domain with no members for such a shape,
+  and raises no `OverflowError` for the extents of the other dimensions.
 - `SparseArray.expand` raises `OverflowError` for a shape with more cells than
   the int64 range.
 - `min()`, `max()` and `mean()` with `fill=`, and `to_dense()` under absence

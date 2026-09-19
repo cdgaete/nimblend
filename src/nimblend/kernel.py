@@ -26,11 +26,11 @@ def span(shape: Sequence[int]) -> int:
     total = 1
     for size in shape:
         total *= int(size)
-        if total > _INT64_MAX:
-            raise OverflowError(
-                f"shape {tuple(shape)} exceeds the int64 range of a raveled "
-                f"index key; reduce the number or the extent of the dimensions"
-            )
+    if total > _INT64_MAX:
+        raise OverflowError(
+            f"shape {tuple(shape)} exceeds the int64 range of a raveled "
+            f"index key; reduce the number or the extent of the dimensions"
+        )
     return total
 
 
