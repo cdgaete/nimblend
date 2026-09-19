@@ -679,11 +679,12 @@ class SparseArray:
         An entry is placed along `into` at the rank of its member in `domain`
         plus `start`. `domain` defaults to `self.domain(dims)`. `coord` is the
         coordinate of `into` and defaults to `domain.as_coord()`. Its extent can
-        exceed the member count when several arrays share one numbering. Entries
-        outside `domain` are dropped. With `out` the entries are written into
-        `out`. Raises ValueError for a `dims` that is not a leading prefix, an
-        `into` among the remaining dimensions, a negative `start`, or positions
-        outside the extent of `coord`.
+        exceed the member count when several arrays share one numbering. A
+        `start` above 0 requires a `coord` with an extent of at least `start`
+        plus the member count. Entries outside `domain` are dropped. With `out`
+        the entries are written into `out`. Raises ValueError for a `dims` that
+        is not a leading prefix, an `into` among the remaining dimensions, a
+        negative `start`, or positions outside the extent of `coord`.
         """
         dims = unique_dims(dims)
         axes = frame.axes_of(self, dims, "group")
