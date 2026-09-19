@@ -92,6 +92,25 @@ def same_frame(left: Any, right: Any) -> None:
     same_absence(left, right)
 
 
+def renamed_frame(
+    array: Any, names: Mapping[str, str]
+) -> tuple[tuple[str, ...], dict[str, Coord]]:
+    """Return the array's dimensions and coordinates with `names` applied.
+
+    Raises ValueError for a key of `names` that is not a dimension of the
+    array, and for two dimensions mapped to one name.
+    """
+    known_dims("rename", names, array.dims)
+    dims = tuple(names.get(d, d) for d in array.dims)
+    if len(set(dims)) != len(dims):
+        raise ValueError(
+            f"rename maps two dimensions onto one name in {dims}; map each "
+            f"dimension to a distinct name"
+        )
+    coords = {names.get(d, d): array.coords[d] for d in array.dims}
+    return dims, coords
+
+
 def reduction_policy(
     array: Any, skip: bool | None, fill: float | None, takes_fill: bool = True
 ) -> None:

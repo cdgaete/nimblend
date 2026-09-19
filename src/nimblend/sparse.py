@@ -288,15 +288,10 @@ class SparseArray:
         Raises ValueError for a key that is not a dimension of the array, and
         when two dimensions map to one name.
         """
-        known_dims("rename", names, self.dims)
-        dims = tuple(names.get(d, d) for d in self.dims)
-        if len(set(dims)) != len(dims):
-            raise ValueError(
-                f"rename maps two dimensions onto one name in {dims}; map each "
-                f"dimension to a distinct name"
-            )
-        coords = {names.get(d, d): self.coords[d] for d in self.dims}
-        return SparseArray(self.index, self.data, coords, dims, self.absence)
+        dims, coords = frame.renamed_frame(self, names)
+        return SparseArray.from_canonical(
+            self.index, self.data, coords, dims, self.absence
+        )
 
     def transpose(self, *dims: str) -> "SparseArray":
         """Return the array with its dimensions in the given order.
