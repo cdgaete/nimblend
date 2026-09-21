@@ -10,6 +10,7 @@ from nimblend import display, frame, kernel
 from nimblend.coords import (
     Coord,
     StoredCoord,
+    check_index,
     distinct_labels,
     known_dims,
     numbered_from,
@@ -41,25 +42,7 @@ def is_canonical(index: npt.ArrayLike, shape: Iterable[int]) -> bool:
     shape = tuple(int(size) for size in shape)
     if index.dtype.kind not in "iu":
         raise TypeError(f"index has dtype {index.dtype}; pass an integer index matrix")
-    if index.ndim != 2:
-        raise ValueError(
-            f"index has {index.ndim} dimension(s); pass a 2-D index matrix with "
-            f"one row per dimension"
-        )
-    if index.shape[0] != len(shape):
-        raise ValueError(
-            f"index has {index.shape[0]} row(s) and shape {shape} has "
-            f"{len(shape)} extent(s); pass one row per extent"
-        )
-    if index.shape[1]:
-        for axis, extent in enumerate(shape):
-            low, high = int(index[axis].min()), int(index[axis].max())
-            if low < 0 or high >= extent:
-                raise ValueError(
-                    f"row {axis} of the index has positions from {low} to "
-                    f"{high} and extent {extent}; pass positions from 0 to "
-                    f"{extent - 1}"
-                )
+    check_index(index, shape)
     return kernel.is_canonical(index, shape)
 
 
@@ -81,11 +64,16 @@ class SparseArray:
         absence: str = "empty",
     ) -> None:
         self._set_frame(coords, dims, absence)
+        index = np.asarray(index)
+        data = np.asarray(data, dtype=np.float64)
+        check_index(index, self.shape)
+        if data.shape != (index.shape[1],):
+            raise ValueError(
+                f"index has {index.shape[1]} column(s) and the values have shape "
+                f"{data.shape}; pass one value per column"
+            )
         index, data = kernel.canonicalize(
-            np.asarray(index, dtype=np.int32),
-            np.asarray(data, dtype=np.float64),
-            self.shape,
-            on_duplicate="raise",
+            index.astype(np.int32, copy=False), data, self.shape, on_duplicate="raise"
         )
         self.index = index
         self.data = data
@@ -539,10 +527,8 @@ class SparseArray:
         if fill is not None:
             reduced = getattr(np, op)(self._filled(fill), axis=axis)
             dims = tuple(d for d in self.dims if d != dim)
-            labels = {
-                d: self.coords[d].to_index(np.arange(len(self.coords[d]))) for d in dims
-            }
-            return SparseArray.from_dense(reduced, labels, self.absence)
+            coords = {d: self.coords[d] for d in dims}
+            return Domain.full(dims, coords).array(reduced.ravel(), self.absence)
         index, data = kernel.reduce_axis(
             self.index,
             self.data,

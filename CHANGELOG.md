@@ -19,6 +19,28 @@ only correct defects of that release, from 0. The releases up to 0.2.2 follow
 
 ## Unreleased
 
+### Removed
+
+- `ProductCoord`, `SubsetCoord` and `Domain.as_coord` take no `start`. Every
+  coordinate numbers its positions from 0 to its extent less one. `group` and
+  `identity` keep `start`, the position of the first member inside a wider
+  `coord`.
+
+### Fixed
+
+- The `SparseArray` constructor raises `ValueError` for an index that is not
+  2-D, an index without one row per dimension, a position outside the extent
+  of its dimension, including a negative position, and an index without one
+  value per column.
+- `Domain` raises `ValueError` for a code outside the cells of its shape.
+  `Domain.from_coordinates` raises `ValueError` for a position outside the
+  extent of its dimension.
+- `ProductCoord.to_position` and `SubsetCoord.to_position` raise `KeyError`
+  for a cell outside their sizes, and `ValueError` for an index without one
+  row per axis. `from_long` raises the same `KeyError` for such a cell.
+- `sum`, `mean`, `min` and `max` with `dim` and `fill=` return an array over
+  the coordinates of the remaining dimensions, with their extents.
+
 ## 0.20260921.0 - 2026-09-21
 
 ### Added

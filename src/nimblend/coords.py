@@ -108,82 +108,109 @@ class StoredCoord:
         return self.labels[positions]
 
 
-class ProductCoord:
-    """A coordinate over the full product of axis sizes, numbered from `start`."""
+def _cell(index: npt.NDArray[Any], at: int) -> tuple[int, ...]:
+    """Return the cell at position `at` of an index matrix, for a message."""
+    return tuple(int(v) for v in index[:, at])
 
-    def __init__(self, sizes: Sequence[int], start: int = 0) -> None:
+
+def _cells_of(
+    index: npt.ArrayLike, sizes: tuple[int, ...], container: str
+) -> npt.NDArray[Any]:
+    """Return `index` as an index matrix over `sizes`.
+
+    `container` describes the coordinate in a message. Raises ValueError for
+    an index matrix without one row per axis of `sizes`. Raises KeyError for
+    a cell outside `sizes`.
+    """
+    index = np.asarray(index)
+    if index.ndim != 2 or index.shape[0] != len(sizes):
+        raise ValueError(
+            f"index has shape {index.shape}; pass a 2-D index matrix with "
+            f"{len(sizes)} row(s), one per axis of sizes {sizes}"
+        )
+    at = kernel.first_outside(index, sizes)
+    if at >= 0:
+        raise KeyError(
+            f"cell {_cell(index, at)} is not in {container}; pass only cells "
+            f"the coordinate contains"
+        )
+    return index
+
+
+class ProductCoord:
+    """A coordinate over the full product of axis sizes."""
+
+    def __init__(self, sizes: Sequence[int]) -> None:
         self.sizes = tuple(int(s) for s in sizes)
-        self.start = int(start)
 
     def __len__(self) -> int:
         return kernel.span(self.sizes)
 
     def __repr__(self) -> str:
-        return f"ProductCoord(sizes={self.sizes}, start={self.start})"
+        return f"ProductCoord(sizes={self.sizes})"
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, ProductCoord):
             return NotImplemented
-        return self.sizes == other.sizes and self.start == other.start
+        return self.sizes == other.sizes
 
-    def to_position(self, index: npt.NDArray[Any]) -> kernel.Keys:
-        """Return the position of each column of an index matrix."""
-        return kernel.ravel(index, self.sizes) + self.start
+    def to_position(self, index: npt.ArrayLike) -> kernel.Keys:
+        """Return the position of each column of an index matrix.
+
+        Raises ValueError for an index matrix without one row per axis.
+        Raises KeyError for a cell outside the product.
+        """
+        cells = _cells_of(index, self.sizes, f"the product of sizes {self.sizes}")
+        return kernel.ravel(cells, self.sizes)
 
     def to_index(self, positions: Positions) -> kernel.Index:
         """Return the index matrix at the given positions."""
-        return kernel.unravel(np.asarray(positions) - self.start, self.sizes)
+        return kernel.unravel(np.asarray(positions), self.sizes)
 
 
 class SubsetCoord:
-    """A coordinate over a subset of a product, in code order from `start`.
+    """A coordinate over a subset of a product, in code order.
 
     `codes` are the raveled keys of the members and must ascend without
-    repeats. The position of a member is its rank among the codes plus
-    `start`.
+    repeats. The position of a member is its rank among the codes.
     """
 
-    def __init__(
-        self, codes: npt.ArrayLike, sizes: Sequence[int], start: int = 0
-    ) -> None:
+    def __init__(self, codes: npt.ArrayLike, sizes: Sequence[int]) -> None:
         self.codes = np.asarray(codes, dtype=np.int64)
         self.sizes = tuple(int(s) for s in sizes)
-        self.start = int(start)
 
     def __len__(self) -> int:
         return int(self.codes.size)
 
     def __repr__(self) -> str:
-        return f"SubsetCoord({len(self)} of {self.sizes}, start={self.start})"
+        return f"SubsetCoord({len(self)} of {self.sizes})"
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, SubsetCoord):
             return NotImplemented
-        return (
-            self.sizes == other.sizes
-            and self.start == other.start
-            and bool(np.array_equal(self.codes, other.codes))
+        return self.sizes == other.sizes and bool(
+            np.array_equal(self.codes, other.codes)
         )
 
-    def to_position(self, index: npt.NDArray[Any]) -> Positions:
+    def to_position(self, index: npt.ArrayLike) -> Positions:
         """Return the position of each column of an index matrix.
 
+        Raises ValueError for an index matrix without one row per axis.
         Raises KeyError for a cell the subset does not contain.
         """
+        index = _cells_of(index, self.sizes, "the subset")
         at = kernel.lookup(self.codes, kernel.ravel(index, self.sizes))
         miss = at < 0
         if miss.any():
             raise KeyError(
-                f"cell {tuple(int(v) for v in index[:, np.flatnonzero(miss)[0]])} "
-                f"is not in the subset; pass only cells the subset contains"
+                f"cell {_cell(index, int(np.flatnonzero(miss)[0]))} is not in "
+                f"the subset; pass only cells the coordinate contains"
             )
-        return at + self.start
+        return at
 
     def to_index(self, positions: Positions) -> kernel.Index:
         """Return the index matrix at the given positions."""
-        return kernel.unravel(
-            self.codes[np.asarray(positions) - self.start], self.sizes
-        )
+        return kernel.unravel(self.codes[np.asarray(positions)], self.sizes)
 
 
 type Coord = StoredCoord | ProductCoord | SubsetCoord
@@ -206,6 +233,32 @@ def numbered_from(size: int, into: str, coord: Coord, start: int) -> int:
             f"pass a smaller start or a larger coord"
         )
     return start
+
+
+def check_index(index: npt.NDArray[Any], shape: tuple[int, ...]) -> None:
+    """Raise ValueError for an index matrix that does not fit `shape`.
+
+    The matrix is 2-D, has one row per extent of `shape`, and has each
+    position from 0 to the extent of its row less one.
+    """
+    if index.ndim != 2:
+        raise ValueError(
+            f"index has {index.ndim} dimension(s); pass a 2-D index matrix with "
+            f"one row per dimension"
+        )
+    if index.shape[0] != len(shape):
+        raise ValueError(
+            f"index has {index.shape[0]} row(s) and shape {shape} has "
+            f"{len(shape)} extent(s); pass one row per extent"
+        )
+    at = kernel.first_outside(index, shape)
+    if at >= 0:
+        axis = next(a for a, e in enumerate(shape) if not 0 <= index[a, at] < e)
+        low, high = int(index[axis].min()), int(index[axis].max())
+        raise ValueError(
+            f"row {axis} of the index has positions from {low} to {high} and "
+            f"extent {shape[axis]}; pass positions from 0 to {shape[axis] - 1}"
+        )
 
 
 def require_coords(dims: Iterable[str], coords: Mapping[str, Coord]) -> None:

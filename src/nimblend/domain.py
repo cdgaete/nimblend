@@ -1,5 +1,6 @@
 """A set of coordinates over a tuple of dimensions."""
 
+import math
 from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
@@ -10,6 +11,7 @@ from nimblend import display, kernel
 from nimblend.coords import (
     Coord,
     SubsetCoord,
+    check_index,
     label_at,
     label_positions,
     numbered_from,
@@ -30,7 +32,7 @@ class Domain:
     `dims`, `shape` and `coords` define the frame, and `size` is the number of
     members. The members are stored in `codes`, the raveled C-order keys of
     their multi-indices. The constructor raises ValueError for codes that do
-    not ascend without repeats.
+    not ascend without repeats, and for a code outside the cells of `shape`.
     """
 
     def __init__(
@@ -48,6 +50,13 @@ class Domain:
                 f"domain code {int(codes[at])} at position {at} is followed "
                 f"by {int(codes[at + 1])}; pass codes that ascend without "
                 f"repeating"
+            )
+        cells = math.prod(self.shape)
+        if codes.size and (codes[0] < 0 or codes[-1] >= cells):
+            raise ValueError(
+                f"domain codes run from {int(codes[0])} to {int(codes[-1])} and "
+                f"shape {self.shape} has {cells} cells; pass codes from 0 to "
+                f"{cells - 1}"
             )
         self.codes = codes
 
@@ -89,20 +98,22 @@ class Domain:
         """Return a domain from an index matrix with one row per dimension.
 
         Each column is one member. Raises ValueError for no dimensions, a
-        missing coordinate, an index matrix of the wrong shape and a repeated
-        member.
+        missing coordinate, an index matrix of the wrong shape, a position
+        outside the extent of its dimension and a repeated member.
         """
         dims = tuple(dims)
         if not dims:
             raise ValueError("no dimension is given; pass at least one dimension")
         require_coords(dims, coords)
-        index = np.asarray(index, dtype=np.int32)
+        index = np.asarray(index)
         if index.ndim != 2 or index.shape[0] != len(dims):
             raise ValueError(
                 f"an index matrix over {dims} has {len(dims)} rows; got shape "
                 f"{index.shape}"
             )
         shape = tuple(len(coords[d]) for d in dims)
+        check_index(index, shape)
+        index = index.astype(np.int32, copy=False)
         keys = kernel.ravel(index, shape)
         codes = kernel.distinct(keys)
         if codes.size != keys.size:
@@ -393,12 +404,12 @@ class Domain:
         keys = kernel.distinct(kernel.ravel(self.coordinates()[axes], shape))
         return Domain._over(keys, dims, self.coords, shape)
 
-    def as_coord(self, start: int = 0) -> SubsetCoord:
-        """Return this domain as a `SubsetCoord`, its members numbered from `start`.
+    def as_coord(self) -> SubsetCoord:
+        """Return this domain as a `SubsetCoord`.
 
-        The position of a member is its rank in the domain plus `start`.
+        The position of a member is its rank in the domain.
         """
-        return SubsetCoord(self.codes, self.shape, start)
+        return SubsetCoord(self.codes, self.shape)
 
     def array(self, values: npt.ArrayLike, absence: str = "empty") -> "SparseArray":
         """Return an array over the members of this domain, valued by `values`.
@@ -428,9 +439,10 @@ class Domain:
     ) -> "SparseArray":
         """Return each member paired with its position along `into`, valued 1.0.
 
-        The position of a member is its rank here plus `start`, as in
-        `as_coord(start)`. `coord` is the coordinate of `into`. Its extent can
-        exceed the member count when several domains share one numbering.
+        The position of a member is its rank here plus `start`. The rank is
+        the position under `as_coord()`. `coord` is the coordinate of `into`.
+        Its extent can exceed the member count when several domains share one
+        numbering.
         Raises ValueError for an `into` the domain already has, a negative
         `start`, or positions outside the extent of `coord`.
         """

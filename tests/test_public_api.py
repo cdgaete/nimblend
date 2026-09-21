@@ -246,15 +246,15 @@ def test_a_domain_answers_the_frame_a_consumer_reads():
 
 
 def test_a_consumer_numbers_a_domains_members_without_reading_its_codes():
-    # the reader above `codes`: `as_coord` numbers the members, and the
-    # coordinate it answers places an entry the same way the array `identity`
-    # builds does. A consumer never hands raw codes to `SubsetCoord` itself.
+    # `as_coord` numbers the members by rank, and `identity` places each member
+    # at that rank plus its start. A consumer passes no raw codes to
+    # `SubsetCoord`.
     coords = {"t": nb.StoredCoord(np.array([2030, 2040, 2050]))}
     domain = nb.Domain.full(("t",), coords)
 
-    numbering = domain.as_coord(10)
+    numbering = domain.as_coord()
     assert len(numbering) == 3
-    assert numbering.to_position(domain.coordinates()).tolist() == [10, 11, 12]
+    assert numbering.to_position(domain.coordinates()).tolist() == [0, 1, 2]
 
     paired = domain.identity("k", nb.ProductCoord((20,)), start=10)
     assert paired.coordinates()[1].tolist() == [10, 11, 12]

@@ -102,7 +102,7 @@ def test_naming_no_dimension_at_all_raises():
 
 def test_a_coordinate_that_cannot_read_a_label_column_raises():
     # a generated coordinate reads an index matrix, not a column of labels
-    with pytest.raises(ValueError, match="pass one label per position"):
+    with pytest.raises(ValueError, match="pass a 2-D index matrix with 2 row"):
         Domain.from_labels(
             ("g",), {"g": ProductCoord((2, 3))}, {"g": np.array([0, 1, 2])}
         )

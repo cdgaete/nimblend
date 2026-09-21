@@ -165,11 +165,6 @@ def test_each_coordinate_kind_describes_itself():
     assert "SubsetCoord" in repr(SubsetCoord(np.array([0, 2]), (2, 3)))
 
 
-def test_a_coordinate_repr_reports_where_it_is_numbered_from():
-    assert "start=10" in repr(SubsetCoord(np.array([0, 2]), (2, 3), start=10))
-    assert "start=10" in repr(ProductCoord((2, 3), start=10))
-
-
 def test_a_buffer_reports_how_much_of_it_is_reserved():
     buffer = EntryBuffer(2, 100)
     assert "capacity=100" in repr(buffer)

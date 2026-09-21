@@ -49,13 +49,6 @@ def test_product_coord_is_stride_arithmetic():
     assert np.array_equal(c.to_index(np.array([7, 19])), np.array([[1, 3], [2, 4]]))
 
 
-def test_product_coord_offsets_by_start():
-    c = coords.ProductCoord((2, 3), start=100)
-    idx = np.array([[0], [0]], dtype=np.int32)
-    assert list(c.to_position(idx)) == [100]
-    assert np.array_equal(c.to_index(np.array([100])), np.array([[0], [0]]))
-
-
 def test_subset_coord_position_is_the_entry_rank():
     # a subset of a 4x4 grid holding three cells
     sizes = (4, 4)
@@ -79,11 +72,6 @@ def test_an_empty_subset_coord_raises_key_error_for_any_cell():
         c.to_position(np.array([[0], [1]], dtype=np.int32))
 
 
-def test_a_subset_coord_numbered_from_a_start_adds_it_to_the_rank():
-    c = coords.SubsetCoord(np.array([1, 5], dtype=np.int64), (3, 3), start=10)
-    assert list(c.to_position(np.array([[1, 0], [2, 1]], dtype=np.int32))) == [11, 10]
-
-
 def test_stored_coords_are_equal_when_they_name_the_same_labels():
     a = coords.StoredCoord(np.array(["a", "b"]))
     assert a == coords.StoredCoord(np.array(["a", "b"]))
@@ -93,7 +81,6 @@ def test_stored_coords_are_equal_when_they_name_the_same_labels():
 
 def test_generated_coords_are_equal_on_their_rule_not_their_extent():
     assert coords.ProductCoord((2, 3)) == coords.ProductCoord((2, 3))
-    assert coords.ProductCoord((2, 3)) != coords.ProductCoord((2, 3), start=6)
     assert coords.ProductCoord((2, 3)) != coords.ProductCoord((3, 2))
     codes = np.array([1, 5], dtype=np.int64)
     assert coords.SubsetCoord(codes, (3, 3)) == coords.SubsetCoord(codes, (3, 3))

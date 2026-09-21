@@ -100,6 +100,21 @@ def first_unsorted(keys: Keys) -> int:
     return at if bool(step[at]) else -1
 
 
+def first_outside(idx: Index, shape: Sequence[int]) -> int:
+    """Return the first column of `idx` with a position outside `shape`, or -1.
+
+    `idx` has one row per extent of `shape`. A position is inside when it is
+    0 or more and below the extent of its row.
+    """
+    first = -1
+    for axis, extent in enumerate(shape):
+        row = idx[axis]
+        if row.size and (row.min() < 0 or row.max() >= extent):
+            at = int(np.flatnonzero((row < 0) | (row >= extent))[0])
+            first = at if first < 0 else min(first, at)
+    return first
+
+
 def first_repeat(keys: Positions) -> int:
     """Return the position of a repeated key, or -1 when the keys are distinct.
 

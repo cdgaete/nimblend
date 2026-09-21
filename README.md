@@ -149,10 +149,12 @@ The two coordinates return the same label. One uses 80 MB, and the other a tuple
 | Coordinate | Stores | Use |
 |---|---|---|
 | `StoredCoord(labels)` | An array of labels | A dimension with arbitrary labels |
-| `ProductCoord(sizes, start=0)` | Axis sizes only | A dimension over a full product |
-| `SubsetCoord(codes, sizes, start=0)` | The raveled codes of the subset | A dimension over part of a product |
+| `ProductCoord(sizes)` | Axis sizes only | A dimension over a full product |
+| `SubsetCoord(codes, sizes)` | The raveled codes of the subset | A dimension over part of a product |
 
 `StoredCoord` builds the sorted permutation for lookups at the first lookup, not at construction. A stored coordinate that only defines the extent of a dimension never builds it.
+
+Every coordinate numbers its positions from 0 to its extent less one. `ProductCoord` and `SubsetCoord` raise `KeyError` for a cell outside their sizes.
 
 **Effect.** A `ProductCoord` over millions of positions stores only its axis sizes. A subset of a product is a coordinate of its own, not a full grid with missing cells.
 
@@ -160,7 +162,7 @@ The two coordinates return the same label. One uses 80 MB, and the other a tuple
 
 Labels do not determine how many positions have a value. Each storage form suits a different density, and both implement one contract.
 
-`SparseArray` stores an index matrix, with one row per dimension and one column per entry, and a value buffer. It stores nothing for an absent coordinate. The entries are in canonical order: sorted by their C-order ravel key, with no key repeated. Canonical order makes alignment a merge over sorted keys, not a hash join.
+`SparseArray` stores an index matrix, with one row per dimension and one column per entry, and a value buffer. It stores nothing for an absent coordinate. The constructor raises `ValueError` for a position outside the extent of its dimension and for an index without one value per column. The entries are in canonical order: sorted by their C-order ravel key, with no key repeated. Canonical order makes alignment a merge over sorted keys, not a hash join.
 
 `DenseArray` stores an ndarray over the same labeled dimensions. It is faster above about 1% density. The [Performance](#performance) section measures the crossover: near 1% density for time. The sparse form uses less memory at every density the section measures.
 
@@ -239,10 +241,10 @@ shared.labels()  # {'year': array([2040]), 'region': array(['DE'], dtype='<U2')}
 p.restrict(shared).nnz  # 1
 ```
 
-A domain is an ordered set, and it defines a numbering of its members. The members can therefore form a dimension of another array. `as_coord(start)` returns the domain as a coordinate. `identity(into, coord)` pairs each member with its position along a new dimension. The two numberings are equal: a member has the same position under both.
+A domain is an ordered set, and it defines a numbering of its members. The members can therefore form a dimension of another array. `as_coord()` returns the domain as a coordinate, and the position of a member is its rank. `identity(into, coord, start)` pairs each member with its rank plus `start` along a new dimension. With `start=0` the two numberings are equal.
 
 ```python
-shared.as_coord(start=5)  # SubsetCoord(1 of (3, 2), start=5)
+shared.as_coord()  # SubsetCoord(1 of (3, 2))
 ```
 
 **Effect.** A domain supports intersection, union, difference and symmetric difference, and numbers its members. `cross(other)` pairs every member with every member of a domain over other dimensions. A consumer finds which members remain after an operation, and gives them positions along a new dimension.
@@ -327,7 +329,7 @@ Every operation below is part of the `Array` protocol, and both implementations 
 ```python
 grouped = demand.group(("year",), into="g")
 grouped  # SparseArray(('g', 'region'), shape=(2, 2), nnz=3, absence='empty')
-grouped.coords["g"]  # SubsetCoord(2 of (3,), start=0)
+grouped.coords["g"]  # SubsetCoord(2 of (3,))
 ```
 
 The grouped dimensions are a leading prefix of the canonical order, and `group` raises `ValueError` otherwise. The result is then canonical as written and requires no sort. An entry at a coordinate outside the domain is removed. A `coord` with an extent larger than the member count and a non-zero `start` number the result inside a wider extent, and several results then share one destination buffer and one numbering. `group` raises `ValueError` for positions outside the extent of `coord`.
@@ -402,12 +404,12 @@ The excess is constant at 9 MB. It is the working set of one sort-merge, not a s
 
 The package has two layers.
 
-`kernel.py` contains module-level functions over plain numpy buffers: `span`, `ravel`, `unravel`, `distinct`, `first_unsorted`, `first_repeat`, `canonicalize`, `align`, `lookup`, `gather`, `select_axis`, `compress`, `take_filled`, `multiply_lookup`, `multiply_join`, `cross`, `cross_keys`, `regroup`, `densify`, `reduce_axis`, `weighted_sum_axis`, `shift_axis`, `to_csr` and `is_canonical`. They take and return numpy arrays, and they use no labels or dimensions. A compiled module with the same signatures can replace the layer.
+`kernel.py` contains module-level functions over plain numpy buffers: `span`, `ravel`, `unravel`, `distinct`, `first_unsorted`, `first_repeat`, `first_outside`, `canonicalize`, `align`, `lookup`, `gather`, `select_axis`, `compress`, `take_filled`, `multiply_lookup`, `multiply_join`, `cross`, `cross_keys`, `regroup`, `densify`, `reduce_axis`, `weighted_sum_axis`, `shift_axis`, `to_csr` and `is_canonical`. They take and return numpy arrays, and they use no labels or dimensions. A compiled module with the same signatures can replace the layer.
 
 The array layer, `SparseArray`, `DenseArray`, `Domain` and the coordinates, stores the labels and the frames, validates the arguments, and calls the kernel functions. `SparseArray` and `Domain` call a kernel function for every sort, merge, lookup, gather, replication and reduction along an axis of their entries. These buffer operations are outside the kernel:
 
 - `StoredCoord.to_position` sorts and searches the stored labels, and `StoredCoord.to_index` indexes them. The kernel uses no labels.
-- `ProductCoord` and `SubsetCoord` add `start` to a position or subtract it, and `SubsetCoord.to_index` indexes its codes by position.
+- `SubsetCoord.to_index` indexes its codes by position.
 - `DenseArray` stores a grid, and its operations are numpy operations over the grid.
 - An operator applies its numpy function, such as `np.add` or `np.divide`, to the value vectors of the aligned entries. `mean` divides the sums by the counts.
 - A reduction over the whole array applies the numpy reduction to the values. A reduction with `fill=` applies it to the grid that `densify` returns.

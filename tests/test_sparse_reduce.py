@@ -1,7 +1,8 @@
 import numpy as np
 import pytest
 
-from nimblend.coords import StoredCoord
+from nimblend import from_long
+from nimblend.coords import ProductCoord, StoredCoord, SubsetCoord
 from nimblend.sparse import SparseArray
 
 
@@ -51,6 +52,37 @@ def test_reducing_the_only_dimension_carries_the_op_and_the_fill_path():
     # arrives at the same array over no dimensions
     assert arr.sum("x", fill=0.0).dims == ()
     assert arr.sum("x", fill=0.0).to_dense() == 6.0
+
+
+@pytest.mark.parametrize("op", ["sum", "mean", "min", "max"])
+def test_a_reduction_with_fill_keeps_the_coordinates_it_does_not_reduce(op):
+    # a product of sizes (2, 3) has extent 6; a StoredCoord of its index
+    # matrix has 12 labels
+    g = ProductCoord((2, 3))
+    s = SubsetCoord(np.array([1, 4]), (2, 3))
+    t = StoredCoord(np.arange(2))
+    arr = from_long(
+        ("g", "s", "t"),
+        {"g": g, "s": s, "t": t},
+        {"g": np.array([[0, 1], [1, 2]]), "s": np.array([[0, 1], [1, 1]]), "t": [0, 1]},
+        [1.0, 2.0],
+    )
+    got = getattr(arr, op)(dim="t", fill=0.0)
+    assert got.coords == {"g": g, "s": s}
+    assert got.shape == (6, 2)
+
+
+def test_a_sum_with_fill_places_each_total_at_its_cell():
+    g = ProductCoord((2, 3))
+    t = StoredCoord(np.arange(2))
+    arr = from_long(
+        ("g", "t"),
+        {"g": g, "t": t},
+        {"g": np.array([[0, 1], [1, 2]]), "t": [0, 1]},
+        [1.0, 2.0],
+    )
+    # cell (0, 1) is position 1 and cell (1, 2) is position 5
+    assert arr.sum(dim="t", fill=0.0).to_dense().tolist() == [0, 1, 0, 0, 0, 2]
 
 
 def test_sum_over_everything_is_a_number():

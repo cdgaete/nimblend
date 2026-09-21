@@ -75,11 +75,11 @@ def test_a_member_is_paired_with_its_own_position_along_a_new_dimension():
     assert got.values().tolist() == [1.0, 1.0, 1.0]
 
 
-def test_the_positions_are_the_ones_as_coord_states():
+def test_the_positions_are_the_as_coord_ranks_plus_the_start():
     held = domain([0, 2, 4])
     got = held.identity("k", ProductCoord((10,)), start=4)
-    stated = held.as_coord(4).to_position(held.coordinates())
-    assert got.coordinates()[2].tolist() == stated.tolist()
+    ranks = held.as_coord().to_position(held.coordinates())
+    assert got.coordinates()[2].tolist() == (ranks + 4).tolist()
 
 
 def test_the_identity_numbers_from_zero_by_default():
