@@ -227,6 +227,44 @@ def align(keys_a: Keys, keys_b: Keys, how: str) -> tuple[Keys, Positions, Positi
     return merged, take_a, take_b
 
 
+def merge_sum(
+    idxs: Sequence[Index], datas: Sequence[Values], shape: Sequence[int], how: str
+) -> Block:
+    """Return several blocks over one shape added into one canonical block.
+
+    `how` is "union" or "intersect". Under "union" a key of any block is
+    kept. Under "intersect" only a key of every block is kept. The value at a
+    key is the sum of its values, added one block at a time in block order.
+    Each block contains each key at most once. Raises ValueError for another
+    `how`.
+    """
+    if how not in ("union", "intersect"):
+        raise ValueError(f"how is 'union' or 'intersect'; got {how!r}")
+    idx = np.concatenate(idxs, axis=1)
+    data = np.concatenate(datas)
+    if data.size == 0:
+        return idx, data
+    keys = ravel(idx, shape)
+    order = np.argsort(keys, kind="stable")
+    keys = keys[order]
+    values = data[order]
+    first = _run_starts(keys)
+    starts = np.flatnonzero(first)
+    sums = values[starts]
+    repeats = np.flatnonzero(~first)
+    if repeats.size:
+        run = np.cumsum(first)[repeats] - 1
+        rank = repeats - starts[run]
+        for step in range(1, int(rank.max()) + 1):
+            at = rank == step
+            sums[run[at]] += values[repeats[at]]
+    if how == "intersect":
+        counts = np.diff(np.append(starts, keys.size))
+        full = counts == len(idxs)
+        starts, sums = starts[full], sums[full]
+    return idx[:, order[starts]], sums
+
+
 def gather(
     idx: Index,
     data: Values,

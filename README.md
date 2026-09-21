@@ -247,7 +247,7 @@ A domain is an ordered set, and it defines a numbering of its members. The membe
 shared.as_coord()  # SubsetCoord(1 of (3, 2))
 ```
 
-**Effect.** A domain supports intersection, union, difference and symmetric difference, and numbers its members. `cross(other)` pairs every member with every member of a domain over other dimensions. A consumer finds which members remain after an operation, and gives them positions along a new dimension.
+**Effect.** A domain supports intersection, union, difference and symmetric difference, and numbers its members. `cross(other)` pairs every member with every member of a domain over other dimensions. `project(dims)` returns the distinct coordinates of the members over some of the dimensions. A consumer finds which members remain after an operation, and gives them positions along a new dimension.
 
 ### 6. One result from many blocks
 
@@ -296,6 +296,8 @@ A stored zero is a value. Division by a stored zero follows floating-point arith
 
 An operation on a `SparseArray` and a `DenseArray` returns a `SparseArray`. The present coordinates of the dense operand become entries, and the sparse arithmetic above applies. A product intersects presence: it has at most the entries of the sparse operand.
 
+`sum_arrays(arrays)` adds several arrays over one frame in one merge. The result equals adding them in order with `+`. A chain of `+` merges the running sum once per operand, and `sum_arrays` sorts the entries of all operands once. The operands have the same dimensions, labels and absence.
+
 ## Operations
 
 Every operation below is part of the `Array` protocol, and both implementations support it.
@@ -331,6 +333,8 @@ grouped = demand.group(("year",), into="g")
 grouped  # SparseArray(('g', 'region'), shape=(2, 2), nnz=3, absence='empty')
 grouped.coords["g"]  # SubsetCoord(2 of (3,))
 ```
+
+`out` is a destination the entries are written into. `reserve` is a function that `group` calls with the number of entries it writes, and that returns the destination, as `EntryBuffer.reserve` does. `group` raises `ValueError` for a destination of another size, and writes nothing into it.
 
 The grouped dimensions are a leading prefix of the canonical order, and `group` raises `ValueError` otherwise. The result is then canonical as written and requires no sort. An entry at a coordinate outside the domain is removed. A `coord` with an extent larger than the member count and a non-zero `start` number the result inside a wider extent, and several results then share one destination buffer and one numbering. `group` raises `ValueError` for positions outside the extent of `coord`.
 
@@ -404,7 +408,7 @@ The excess is constant at 9 MB. It is the working set of one sort-merge, not a s
 
 The package has two layers.
 
-`kernel.py` contains module-level functions over plain numpy buffers: `span`, `ravel`, `unravel`, `distinct`, `first_unsorted`, `first_repeat`, `first_outside`, `canonicalize`, `align`, `lookup`, `gather`, `select_axis`, `compress`, `take_filled`, `multiply_lookup`, `multiply_join`, `cross`, `cross_keys`, `regroup`, `densify`, `reduce_axis`, `weighted_sum_axis`, `shift_axis`, `to_csr` and `is_canonical`. They take and return numpy arrays, and they use no labels or dimensions. A compiled module with the same signatures can replace the layer.
+`kernel.py` contains module-level functions over plain numpy buffers: `span`, `ravel`, `unravel`, `distinct`, `first_unsorted`, `first_repeat`, `first_outside`, `canonicalize`, `merge_sum`, `align`, `lookup`, `gather`, `select_axis`, `compress`, `take_filled`, `multiply_lookup`, `multiply_join`, `cross`, `cross_keys`, `regroup`, `densify`, `reduce_axis`, `weighted_sum_axis`, `shift_axis`, `to_csr` and `is_canonical`. They take and return numpy arrays, and they use no labels or dimensions. A compiled module with the same signatures can replace the layer.
 
 The array layer, `SparseArray`, `DenseArray`, `Domain` and the coordinates, stores the labels and the frames, validates the arguments, and calls the kernel functions. `SparseArray` and `Domain` call a kernel function for every sort, merge, lookup, gather, replication and reduction along an axis of their entries. These buffer operations are outside the kernel:
 
@@ -452,6 +456,7 @@ from nimblend import (
     from_long,  # an array from label columns and a value column
     from_dense,  # an array from a grid and its labels
     combined_dims,  # the frame of a binary result
+    sum_arrays,  # the sum of several arrays over one frame, in one merge
     is_canonical,  # whether an index is sorted with no key repeated
 )
 ```

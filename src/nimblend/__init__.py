@@ -2,7 +2,8 @@
 
 `SparseArray` and `DenseArray` implement the `Array` protocol. `SparseArray`
 stores only the entries that are present. `from_long` builds one from one
-label column per dimension and one value column. A `Domain` is a set of
+label column per dimension and one value column. `sum_arrays` adds several
+arrays over one frame in one merge. A `Domain` is a set of
 coordinates over a tuple of dimensions. `combined_dims` returns the
 dimensions of a binary result from the dimensions of the two operands.
 """
@@ -24,7 +25,7 @@ from nimblend.dense import DenseArray
 from nimblend.domain import Domain
 from nimblend.frame import combined_dims
 from nimblend.protocol import Array
-from nimblend.sparse import SparseArray, is_canonical
+from nimblend.sparse import SparseArray, is_canonical, sum_arrays
 
 __version__ = "0.20260921.0"
 
@@ -38,6 +39,7 @@ __all__ = [
     "from_long",
     "from_dense",
     "is_canonical",
+    "sum_arrays",
     "StoredCoord",
     "ProductCoord",
     "SubsetCoord",

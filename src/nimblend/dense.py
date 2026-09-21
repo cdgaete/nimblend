@@ -350,13 +350,14 @@ class DenseArray:
         coord: Coord | None = None,
         start: int = 0,
         out: kernel.Block | None = None,
+        reserve: Callable[[int], kernel.Block] | None = None,
     ) -> SparseArray:
         """Return `dims` collapsed into one dimension `into`, numbered by a domain.
 
         The result is a `SparseArray`, computed by `SparseArray.group` from the
         present coordinates.
         """
-        return self._sparse().group(dims, into, domain, coord, start, out)
+        return self._sparse().group(dims, into, domain, coord, start, out, reserve)
 
     def conform(
         self, dims: Iterable[str], labels: Mapping[str, npt.ArrayLike]

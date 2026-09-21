@@ -46,6 +46,37 @@ def is_canonical(index: npt.ArrayLike, shape: Iterable[int]) -> bool:
     return kernel.is_canonical(index, shape)
 
 
+def sum_arrays(arrays: Iterable["SparseArray"]) -> "SparseArray":
+    """Return the sum of arrays over one frame, computed in one merge.
+
+    The result equals adding the arrays in order with `+`. Under absence
+    "empty" it has every coordinate of any array, and under "unknown" only
+    the coordinates of every array. Raises ValueError for no arrays, and for
+    arrays with different dimensions, labels or absence. Raises TypeError for
+    an array that is not a SparseArray.
+    """
+    arrays = list(arrays)
+    if not arrays:
+        raise ValueError("no array is given; pass at least one array")
+    for arr in arrays:
+        if not isinstance(arr, SparseArray):
+            raise TypeError(
+                f"sum_arrays adds SparseArray objects; got {type(arr).__name__}"
+            )
+    first = arrays[0]
+    for arr in arrays[1:]:
+        frame.same_frame(first, arr)
+    if len(arrays) == 1:
+        return first
+    how = "union" if first.absence == "empty" else "intersect"
+    index, data = kernel.merge_sum(
+        [arr.index for arr in arrays], [arr.data for arr in arrays], first.shape, how
+    )
+    return SparseArray.from_canonical(
+        index, data, first.coords, first.dims, first.absence
+    )
+
+
 class SparseArray:
     """Entries in canonical order, under a coordinate per dimension.
 
@@ -659,6 +690,7 @@ class SparseArray:
         coord: Coord | None = None,
         start: int = 0,
         out: kernel.Block | None = None,
+        reserve: Callable[[int], kernel.Block] | None = None,
     ) -> "SparseArray":
         """Return `dims` collapsed into one dimension `into`, numbered by a domain.
 
@@ -668,10 +700,16 @@ class SparseArray:
         exceed the member count when several arrays share one numbering. A
         `start` above 0 requires a `coord` with an extent of at least `start`
         plus the member count. Entries outside `domain` are dropped. With `out`
-        the entries are written into `out`. Raises ValueError for a `dims` that
-        is not a leading prefix, an `into` among the remaining dimensions, a
-        negative `start`, or positions outside the extent of `coord`.
+        the entries are written into `out`. `reserve` is called with the number
+        of entries inside `domain` and returns the destination, as
+        `EntryBuffer.reserve` does. Raises ValueError for a `dims` that is not a
+        leading prefix, an `into` among the remaining dimensions, a negative
+        `start`, positions outside the extent of `coord`, `out` and `reserve`
+        together, and a destination whose size differs from the number of
+        entries. Nothing is written into a destination of another size.
         """
+        if out is not None and reserve is not None:
+            raise ValueError("group takes one destination; pass out or reserve")
         dims = unique_dims(dims)
         axes = frame.axes_of(self, dims, "group")
         if axes != list(range(len(dims))):
@@ -690,8 +728,17 @@ class SparseArray:
         if coord is None:
             coord = domain.as_coord()
         start = numbered_from(domain.size, into, coord, start)
+        at = domain.positions_of(self)
+        count = int((at >= 0).sum())
+        if reserve is not None:
+            out = reserve(count)
+        if out is not None and int(out[1].size) != count:
+            raise ValueError(
+                f"the destination has {int(out[1].size)} entries and {count} "
+                f"entries are grouped; pass a destination of {count} entries"
+            )
         out_index, out_data = kernel.regroup(
-            self.index, self.data, domain.positions_of(self), len(dims), start, out
+            self.index, self.data, at, len(dims), start, out
         )
         coords = {into: coord}
         coords.update({name: self.coords[name] for name in rest})

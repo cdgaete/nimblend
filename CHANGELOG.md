@@ -19,6 +19,19 @@ only correct defects of that release, from 0. The releases up to 0.2.2 follow
 
 ## Unreleased
 
+### Added
+
+- `sum_arrays(arrays)` returns the sum of several arrays over one frame,
+  computed in one merge. The result equals adding the arrays in order with
+  `+`, including the order in which the values at a coordinate are added.
+  It raises `ValueError` for no arrays and for arrays with different
+  dimensions, labels or absence, and `TypeError` for an array that is not a
+  `SparseArray`.
+- `Domain.project(dims)` returns the distinct coordinates of the members over
+  `dims`, in the order given.
+- `group` takes `reserve=`, a function it calls with the number of entries
+  it writes and that returns the destination. `EntryBuffer.reserve` is one.
+
 ### Removed
 
 - `ProductCoord`, `SubsetCoord` and `Domain.as_coord` take no `start`. Every
@@ -28,6 +41,8 @@ only correct defects of that release, from 0. The releases up to 0.2.2 follow
 
 ### Fixed
 
+- `group` raises `ValueError` for an `out` or a reservation whose size
+  differs from the number of entries it writes, and writes nothing into it.
 - The `SparseArray` constructor raises `ValueError` for an index that is not
   2-D, an index without one row per dimension, a position outside the extent
   of its dimension, including a negative position, and an index without one

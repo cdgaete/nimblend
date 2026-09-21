@@ -404,6 +404,30 @@ class Domain:
         keys = kernel.distinct(kernel.ravel(self.coordinates()[axes], shape))
         return Domain._over(keys, dims, self.coords, shape)
 
+    def project(self, dims: Iterable[str]) -> "Domain":
+        """Return the distinct coordinates of the members over `dims`.
+
+        The result is over `dims` in the order given. Raises ValueError for no
+        dimensions, a repeated dimension and a dimension the domain does not
+        have.
+        """
+        dims = unique_dims(dims)
+        if not dims:
+            raise ValueError("no dimension is given; pass at least one dimension")
+        lacking = [d for d in dims if d not in self.dims]
+        if lacking:
+            raise ValueError(
+                f"dimension(s) {lacking} are not in the domain over {self.dims}; "
+                f"pass dimensions of the domain"
+            )
+        if dims == self.dims:
+            return self
+        axes = [self.dims.index(name) for name in dims]
+        shape = tuple(self.shape[axis] for axis in axes)
+        keys = kernel.ravel(self.coordinates()[axes], shape)
+        coords = {name: self.coords[name] for name in dims}
+        return Domain._over(kernel.distinct(keys), dims, coords, shape)
+
     def as_coord(self) -> SubsetCoord:
         """Return this domain as a `SubsetCoord`.
 

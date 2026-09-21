@@ -17,6 +17,7 @@ def test_the_module_exports_the_contract_and_the_implementation():
         "from_long",
         "from_dense",
         "is_canonical",
+        "sum_arrays",
         "StoredCoord",
         "ProductCoord",
         "SubsetCoord",

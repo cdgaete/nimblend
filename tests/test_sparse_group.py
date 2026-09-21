@@ -156,3 +156,64 @@ def test_a_domain_over_no_dimensions_of_an_empty_array_carries_none():
         arr.index[:, :0], arr.data[:0], arr.coords, arr.dims
     )
     assert empty.domain(()).size == 0
+
+
+def test_group_raises_for_a_destination_larger_than_its_entries():
+    # a slot left unwritten would reach the matrix as whatever it held
+    buffer = EntryBuffer(2, 5)
+    with pytest.raises(ValueError, match=re.escape("destination has 5 entries and 4")):
+        ijc().group(("i", "j"), "g", out=buffer.reserve(5))
+
+
+def test_group_raises_for_a_destination_smaller_than_its_entries():
+    buffer = EntryBuffer(2, 3)
+    with pytest.raises(ValueError, match=re.escape("destination has 3 entries and 4")):
+        ijc().group(("i", "j"), "g", out=buffer.reserve(3))
+
+
+def test_group_writes_nothing_into_a_destination_of_another_size():
+    buffer = EntryBuffer(2, 5)
+    buffer.index[:] = -7
+    buffer.data[:] = -7.0
+    with pytest.raises(ValueError):
+        ijc().group(("i", "j"), "g", out=buffer.reserve(5))
+    assert (buffer.index == -7).all() and (buffer.data == -7.0).all()
+
+
+def test_group_asks_reserve_for_exactly_the_entries_it_writes():
+    buffer = EntryBuffer(2, 10)
+    asked = []
+
+    def reserve(n):
+        asked.append(n)
+        return buffer.reserve(n)
+
+    got = ijc().group(("i", "j"), "g", reserve=reserve)
+    expected = ijc().group(("i", "j"), "g")
+    assert asked == [4]
+    assert buffer.at == 4
+    assert got.coordinates().tolist() == expected.coordinates().tolist()
+    assert buffer.data[:4].tolist() == expected.values().tolist()
+
+
+def test_group_raises_for_a_reservation_of_another_size():
+    buffer = EntryBuffer(2, 10)
+    with pytest.raises(ValueError, match=re.escape("destination has 6 entries and 4")):
+        ijc().group(("i", "j"), "g", reserve=lambda n: buffer.reserve(n + 2))
+
+
+def test_group_raises_for_out_and_reserve_together():
+    buffer = EntryBuffer(2, 10)
+    with pytest.raises(ValueError, match="pass out or reserve"):
+        ijc().group(("i", "j"), "g", out=buffer.reserve(4), reserve=buffer.reserve)
+
+
+def test_a_dense_array_groups_through_reserve():
+    arr = ijc()
+    dense = arr.to_dense()
+    from nimblend.dense import DenseArray
+
+    held = DenseArray(dense, arr.coords, arr.dims, mask=dense != 0.0)
+    buffer = EntryBuffer(2, 10)
+    got = held.group(("i", "j"), "g", reserve=buffer.reserve)
+    assert got.nnz == 4 and buffer.at == 4
