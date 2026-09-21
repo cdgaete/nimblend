@@ -123,3 +123,62 @@ def test_coordinates_are_a_fresh_int32_matrix_of_one_row_per_dimension():
     assert got.shape == (2, held.size)
     got[:] = 0
     assert held.coordinates().tolist() == [[0, 1], [0, 1]]
+
+
+def test_labels_at_positions_are_the_labels_of_those_members_in_that_order():
+    # codes 0, 4 and 5 over shape (2, 3) are (a, 10), (b, 20) and (b, 30)
+    domain = Domain(np.array([0, 4, 5]), ("x", "y"), coords_xy(), (2, 3))
+    got = domain.labels(np.array([2, 0]))
+    assert list(got["x"]) == ["b", "a"]
+    assert list(got["y"]) == [30, 10]
+
+
+def test_coordinates_at_positions_are_the_multi_index_of_those_members():
+    domain = Domain(np.array([0, 4, 5]), ("x", "y"), coords_xy(), (2, 3))
+    assert domain.coordinates([2, 0]).tolist() == [[1, 0], [2, 0]]
+
+
+def test_labels_at_no_positions_are_empty():
+    domain = Domain(np.array([0, 4]), ("x", "y"), coords_xy(), (2, 3))
+    got = domain.labels([])
+    assert got["x"].size == 0
+    assert got["y"].size == 0
+
+
+def test_labels_at_positions_decode_those_members_alone(monkeypatch):
+    # a full domain over (2, 3) has 6 members; two positions decode two keys
+    from nimblend import kernel
+
+    decoded = []
+    unravel = kernel.unravel
+
+    def counted(keys, shape):
+        decoded.append(keys.size)
+        return unravel(keys, shape)
+
+    monkeypatch.setattr(kernel, "unravel", counted)
+    Domain.full(("x", "y"), coords_xy()).labels([5, 1])
+    assert decoded == [2]
+
+
+@pytest.mark.parametrize("positions", [[3], [-1], [0, 7]])
+def test_a_position_outside_the_domain_raises(positions):
+    domain = Domain(np.array([0, 4, 5]), ("x", "y"), coords_xy(), (2, 3))
+    with pytest.raises(ValueError, match="is outside a domain of 3 members"):
+        domain.labels(positions)
+    with pytest.raises(ValueError, match="is outside a domain of 3 members"):
+        domain.coordinates(positions)
+
+
+def test_positions_that_are_not_integers_raise():
+    domain = Domain(np.array([0, 4]), ("x", "y"), coords_xy(), (2, 3))
+    with pytest.raises(ValueError, match="pass integer positions"):
+        domain.labels(np.array([0.0]))
+    with pytest.raises(ValueError, match="pass integer positions"):
+        domain.labels(np.array([True]))
+
+
+def test_positions_over_more_than_one_axis_raise():
+    domain = Domain(np.array([0, 4]), ("x", "y"), coords_xy(), (2, 3))
+    with pytest.raises(ValueError, match="pass a one-dimensional array"):
+        domain.labels(np.array([[0, 1]]))

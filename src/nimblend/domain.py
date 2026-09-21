@@ -200,21 +200,55 @@ class Domain:
             size=self.size,
         )
 
-    def coordinates(self) -> Index:
+    def coordinates(self, positions: npt.ArrayLike | None = None) -> Index:
         """Return the multi-index of each member as a new int32 index matrix.
 
         The matrix has one row per dimension and one column per member, in
-        member order.
+        member order. `positions` selects the members at those positions, in
+        the order given. Raises ValueError for a position that is not an
+        integer, and for a position outside the domain.
         """
-        return kernel.unravel(self.codes, self.shape)
+        if positions is None:
+            return kernel.unravel(self.codes, self.shape)
+        return kernel.unravel(self.codes[self._members_at(positions)], self.shape)
 
-    def labels(self) -> dict[str, npt.NDArray[Any]]:
-        """Return the label of each member, per dimension."""
-        index = self.coordinates()
+    def labels(
+        self, positions: npt.ArrayLike | None = None
+    ) -> dict[str, npt.NDArray[Any]]:
+        """Return the label of each member, per dimension.
+
+        `positions` selects the members at those positions, in the order
+        given. Raises ValueError for a position that is not an integer, and
+        for a position outside the domain.
+        """
+        index = self.coordinates(positions)
         return {
             name: self.coords[name].to_index(index[axis])
             for axis, name in enumerate(self.dims)
         }
+
+    def _members_at(self, positions: npt.ArrayLike) -> Positions:
+        """Return `positions` as int64 positions of members of this domain.
+
+        Raises ValueError for an array that is not one-dimensional, for a
+        position that is not an integer and for a position outside the domain.
+        """
+        at = np.asarray(positions)
+        if at.ndim != 1:
+            raise ValueError(
+                f"positions have shape {at.shape}; pass a one-dimensional array"
+            )
+        if at.size and not np.issubdtype(at.dtype, np.integer):
+            raise ValueError(f"positions have dtype {at.dtype}; pass integer positions")
+        at = at.astype(np.int64)
+        outside = (at < 0) | (at >= self.size)
+        if outside.any():
+            raise ValueError(
+                f"position {int(at[outside][0])} is outside a domain of "
+                f"{self.size} members; pass positions of 0 or more and below "
+                f"{self.size}"
+            )
+        return at
 
     def _same_frame(self, other: "Domain") -> None:
         if self.dims != other.dims or self.shape != other.shape:

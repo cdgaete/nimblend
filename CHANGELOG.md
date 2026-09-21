@@ -19,6 +19,11 @@ only correct defects of that release, from 0. The releases up to 0.2.2 follow
 
 ## Unreleased
 
+### Added
+
+- `Domain.labels` and `Domain.coordinates` take `positions` and return the
+  labels or the multi-indices of the members at those positions alone.
+
 ## 0.20260919.0 - 2026-09-19
 
 ### Added
