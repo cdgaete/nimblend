@@ -19,6 +19,8 @@ only correct defects of that release, from 0. The releases up to 0.2.2 follow
 
 ## Unreleased
 
+## 0.20260921.0 - 2026-09-21
+
 ### Added
 
 - `Domain.labels` and `Domain.coordinates` take `positions` and return the
