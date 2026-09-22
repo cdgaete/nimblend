@@ -16,6 +16,7 @@ type Positions = npt.NDArray[np.integer]
 type Block = tuple[Index, Values]
 
 _INT64_MAX = 2**63 - 1
+_TABLE_RATIO = 4
 
 
 def span(shape: Sequence[int]) -> int:
@@ -190,13 +191,9 @@ def align(keys_a: Keys, keys_b: Keys, how: str) -> tuple[Keys, Positions, Positi
     is the same for `keys_b`. Raises ValueError for another `how`.
     """
     if how == "intersect":
-        if keys_a.size == 0 or keys_b.size == 0:
-            empty_i = np.empty(0, dtype=np.int64)
-            return np.empty(0, dtype=np.int64), empty_i, empty_i.copy()
-        pos = np.searchsorted(keys_b, keys_a)
-        probe = np.minimum(pos, keys_b.size - 1)
-        hit = keys_b[probe] == keys_a
-        return keys_a[hit], np.flatnonzero(hit), pos[hit]
+        at = lookup(keys_b, keys_a)
+        hit = at >= 0
+        return keys_a[hit], np.flatnonzero(hit), at[hit]
 
     if how != "union":
         raise ValueError(f"how is 'union' or 'intersect'; got {how!r}")
@@ -482,12 +479,35 @@ def lookup(keys: Keys, probe: Positions) -> Positions:
     """Return the position of each entry of `probe` in `keys`, or -1 if absent.
 
     `keys` must be sorted and unique. `probe` may repeat and may be unsorted.
+    When the range of `keys` plus their number is at most four times the size
+    of `probe`, the positions are read from a table over that range. Otherwise
+    each probe is found by binary search.
     """
     if keys.size == 0:
         return np.full(probe.size, -1, dtype=np.int64)
+    low = int(keys[0])
+    width = int(keys[-1]) - low + 1
+    if width + keys.size <= _TABLE_RATIO * probe.size:
+        return _table_lookup(keys, probe, low, width)
     at = np.searchsorted(keys, probe)
     np.minimum(at, keys.size - 1, out=at)
     at[keys[at] != probe] = -1
+    return at
+
+
+def _table_lookup(keys: Keys, probe: Positions, low: int, width: int) -> Positions:
+    """Return the position of each probe, read from a table over `keys`.
+
+    The table has `width` slots, and slot `i` refers to the key `low + i`.
+    """
+    table = np.full(width, -1, dtype=np.int64)
+    table[keys - low] = np.arange(keys.size)
+    offset = np.subtract(probe, low, dtype=np.int64)
+    inside = (offset >= 0) & (offset < width)
+    if inside.all():
+        return table[offset]
+    at = np.full(probe.size, -1, dtype=np.int64)
+    at[inside] = table[offset[inside]]
     return at
 
 

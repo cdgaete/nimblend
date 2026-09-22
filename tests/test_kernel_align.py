@@ -93,3 +93,30 @@ def test_union_of_sorted_keys_costs_about_what_a_search_costs():
     assert union < 8 * search, (
         f"align {union * 1e3:.1f} ms, search {search * 1e3:.1f} ms"
     )
+
+
+def test_intersect_of_keys_within_four_probes_reads_a_table(monkeypatch):
+    a = np.arange(0, 100, dtype=np.int64)
+    b = np.arange(50, 150, dtype=np.int64)
+
+    def refuse(*args, **kwargs):
+        raise AssertionError("the keys were searched")
+
+    monkeypatch.setattr(np, "searchsorted", refuse)
+    merged, ta, tb = kernel.align(a, b, "intersect")
+    assert list(merged) == list(range(50, 100))
+    assert list(ta) == list(range(50, 100))
+    assert list(tb) == list(range(0, 50))
+
+
+def test_intersect_matches_intersect1d_on_randomised_operands():
+    rng = np.random.default_rng(13)
+    for _ in range(300):
+        hi = int(rng.integers(2, 400))
+        a = np.unique(rng.integers(0, hi, int(rng.integers(0, 60)))).astype(np.int64)
+        b = np.unique(rng.integers(0, hi, int(rng.integers(0, 60)))).astype(np.int64)
+        merged, ta, tb = kernel.align(a, b, "intersect")
+        assert np.array_equal(merged, np.intersect1d(a, b))
+        assert merged.dtype == np.int64 and ta.dtype == np.int64
+        assert np.array_equal(a[ta], merged)
+        assert np.array_equal(b[tb], merged)

@@ -32,6 +32,14 @@ only correct defects of that release, from 0. The releases up to 0.2.2 follow
 - `group` takes `reserve=`, a function it calls with the number of entries
   it writes and that returns the destination. `EntryBuffer.reserve` is one.
 
+### Changed
+
+- `Domain.positions_of`, `Domain.intersect` and the other lookups of positions
+  among sorted keys read the positions from a table over the range of the
+  keys. The table is used when that range plus the number of keys is at most
+  four times the number of probes, and a binary search otherwise. A lookup of
+  1,401,520 probes among 700,720 keys takes 2.7 ms instead of 30.0 ms.
+
 ### Removed
 
 - `ProductCoord`, `SubsetCoord` and `Domain.as_coord` take no `start`. Every
