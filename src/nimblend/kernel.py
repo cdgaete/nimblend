@@ -62,6 +62,21 @@ def unravel(keys: Positions, shape: Sequence[int]) -> Index:
     return out
 
 
+def cells(shape: Sequence[int]) -> Index:
+    """Return the `(ndim, n)` index matrix of every cell of `shape`, in C order.
+
+    The result equals `unravel` of every key of `shape`. Each row is written
+    from one range of positions. No key is divided.
+    """
+    sizes = tuple(int(size) for size in shape)
+    out = np.empty((len(sizes), span(sizes)), dtype=np.int32)
+    for axis, size in enumerate(sizes):
+        along = [1] * len(sizes)
+        along[axis] = size
+        out[axis].reshape(sizes)[...] = np.arange(size, dtype=np.int32).reshape(along)
+    return out
+
+
 def _run_starts(keys: Keys) -> npt.NDArray[np.bool_]:
     """Return True at the first position of each run of equal keys.
 

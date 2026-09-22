@@ -220,6 +220,8 @@ class Domain:
         integer, and for a position outside the domain.
         """
         if positions is None:
+            if self.size == math.prod(self.shape):
+                return kernel.cells(self.shape)
             return kernel.unravel(self.codes, self.shape)
         return kernel.unravel(self.codes[self._members_at(positions)], self.shape)
 

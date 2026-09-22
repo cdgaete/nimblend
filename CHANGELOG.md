@@ -39,6 +39,10 @@ only correct defects of that release, from 0. The releases up to 0.2.2 follow
   keys. The table is used when that range plus the number of keys is at most
   four times the number of probes, and a binary search otherwise. A lookup of
   1,401,520 probes among 700,720 keys takes 2.7 ms instead of 30.0 ms.
+- `Domain.coordinates()` of a domain with every cell of its shape writes the
+  index matrix one range per dimension, without dividing the codes. On a
+  shape of 1911 by 2920 it takes 3.5 ms instead of 46.6 ms and allocates
+  45 MB instead of 134 MB.
 
 ### Removed
 
