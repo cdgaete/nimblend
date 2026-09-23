@@ -27,7 +27,7 @@ from nimblend.frame import combined_dims
 from nimblend.protocol import Array
 from nimblend.sparse import SparseArray, is_canonical, sum_arrays
 
-__version__ = "0.20260921.0"
+__version__ = "0.20260923.0"
 
 __all__ = [
     "Array",
