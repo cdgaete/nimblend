@@ -162,7 +162,7 @@ Every coordinate numbers its positions from 0 to its extent less one. `ProductCo
 
 Labels do not determine how many positions have a value. Each storage form suits a different density, and both implement one contract.
 
-`SparseArray` stores an index matrix, with one row per dimension and one column per entry, and a value buffer. It stores nothing for an absent coordinate. The constructor raises `ValueError` for a position outside the extent of its dimension and for an index without one value per column. The entries are in canonical order: sorted by their C-order ravel key, with no key repeated. Canonical order makes alignment a merge over sorted keys, not a hash join.
+`SparseArray` stores an index matrix, with one row per dimension and one column per entry, and a value buffer. It stores nothing for an absent coordinate. The constructor raises `ValueError` for a position outside the extent of its dimension and for an index without one value per column. The entries are in canonical order: sorted by their C-order ravel key, with no key repeated. `from_long` with `on_duplicate="sum"` adds the values at a repeated coordinate and returns one entry for it. Its default, `"raise"`, raises `ValueError`. Canonical order makes alignment a merge over sorted keys, not a hash join.
 
 `DenseArray` stores an ndarray over the same labeled dimensions. It is faster above about 1% density. The [Performance](#performance) section measures the crossover: near 1% density for time. The sparse form uses less memory at every density the section measures.
 
@@ -428,7 +428,7 @@ Four design choices are visible in the interface. Sorting uses a single int64 ra
 
 ## Failure behavior
 
-The package raises an exception and does not substitute another behavior. It raises `ValueError` for operands whose labels differ, whose absence declarations differ, or whose frames share no dimension. It raises `ValueError` for a repeated coordinate in a constructed array, and for a quotient where the denominator is absent. A method that takes dimension names raises `ValueError` for a name the array does not have, and for a repeated name. Under `"unknown"`, a reduction or `to_dense()` raises until the caller passes the policy. Each message reports the condition, then the action to take.
+The package raises an exception and does not substitute another behavior. It raises `ValueError` for operands whose labels differ, whose absence declarations differ, or whose frames share no dimension. It raises `ValueError` for a repeated coordinate in a constructed array, except in `from_long` with `on_duplicate="sum"`, and for a quotient where the denominator is absent. A method that takes dimension names raises `ValueError` for a name the array does not have, and for a repeated name. Under `"unknown"`, a reduction or `to_dense()` raises until the caller passes the policy. Each message reports the condition, then the action to take.
 
 ## Development
 

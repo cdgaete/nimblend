@@ -19,6 +19,13 @@ only correct defects of that release, from 0. The releases up to 0.2.2 follow
 
 ## Unreleased
 
+### Added
+
+- `from_long` takes `on_duplicate`. The default, `"raise"`, raises
+  `ValueError` for a repeated coordinate. `"sum"` keeps the rows of a
+  repeated coordinate in input order, adds them with `np.add.reduceat`, and
+  returns one entry for the coordinate.
+
 ## 0.20260923.0 - 2026-09-23
 
 ### Added

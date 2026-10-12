@@ -13,6 +13,7 @@ from collections.abc import Iterable, Mapping
 import numpy as np
 import numpy.typing as npt
 
+from nimblend import kernel
 from nimblend.buffer import EntryBuffer
 from nimblend.coords import (
     Coord,
@@ -53,20 +54,31 @@ def from_long(
     labels: Mapping[str, npt.ArrayLike],
     values: npt.ArrayLike,
     absence: str = "empty",
+    on_duplicate: str = "raise",
 ) -> SparseArray:
     """Return an array from one label column per dimension and one value column.
 
     Each label column is converted to positions by the coordinate of its
     dimension. A label column of a `ProductCoord` or a `SubsetCoord` is an
     index matrix with one column per label. Every column has one label per
-    value. Raises ValueError for a missing coordinate or label column and for
-    columns of different lengths. Raises KeyError for a label the coordinate
-    does not contain.
+    value. `on_duplicate` is "raise" or "sum". Under "raise" a repeated
+    coordinate raises ValueError. Under "sum" the rows of a repeated
+    coordinate keep their input order, `np.add.reduceat` adds them, and the
+    result has one entry for that coordinate. Raises ValueError for a missing
+    coordinate or label column, for columns of different lengths and for
+    another `on_duplicate`. Raises KeyError for a label the coordinate does
+    not contain.
     """
     dims = tuple(dims)
     values = np.asarray(values, dtype=np.float64)
     index = label_positions(dims, coords, labels, values.size)
-    return SparseArray(index, values, coords, dims, absence)
+    if on_duplicate == "raise":
+        return SparseArray(index, values, coords, dims, absence)
+    shape = tuple(len(coords[d]) for d in dims)
+    index, values = kernel.canonicalize(
+        index.astype(np.int32, copy=False), values, shape, on_duplicate=on_duplicate
+    )
+    return SparseArray.from_canonical(index, values, coords, dims, absence)
 
 
 def from_dense(
