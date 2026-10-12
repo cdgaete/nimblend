@@ -19,6 +19,8 @@ only correct defects of that release, from 0. The releases up to 0.2.2 follow
 
 ## Unreleased
 
+## 0.20261012.0 - 2026-10-12
+
 ### Added
 
 - `from_long` takes `on_duplicate`. The default, `"raise"`, raises
