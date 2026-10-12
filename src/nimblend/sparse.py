@@ -130,8 +130,9 @@ class SparseArray:
     ) -> "SparseArray":
         """Return an array over buffers in canonical order, without a copy.
 
-        `index` must ascend by raveled key with no repeat. `is_canonical`
-        checks this; this method does not. The array shares memory with
+        `index` must ascend by raveled key with no repeat. Each row of `index`
+        must be a C-contiguous int32 array. `is_canonical` checks the order;
+        this method checks neither condition. The array shares memory with
         `index` and `data`.
         """
         self = cls.__new__(cls)

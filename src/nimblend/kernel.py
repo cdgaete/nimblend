@@ -178,7 +178,7 @@ def canonicalize(
     if keys.size > 1 and not bool(np.all(keys[1:] >= keys[:-1])):
         order = np.argsort(keys, kind="stable")
         keys = keys[order]
-        idx = idx[:, order]
+        idx = np.take(idx, order, axis=1)
         data = data[order]
     elif out is None:
         idx = idx.copy()
@@ -195,7 +195,7 @@ def canonicalize(
             f"coordinate once"
         )
     starts = np.flatnonzero(first)
-    return _emit(idx[:, starts], np.add.reduceat(data, starts), out)
+    return _emit(np.take(idx, starts, axis=1), np.add.reduceat(data, starts), out)
 
 
 def align(keys_a: Keys, keys_b: Keys, how: str) -> tuple[Keys, Positions, Positions]:
@@ -274,7 +274,7 @@ def merge_sum(
         counts = np.diff(np.append(starts, keys.size))
         full = counts == len(idxs)
         starts, sums = starts[full], sums[full]
-    return idx[:, order[starts]], sums
+    return np.take(idx, order[starts], axis=1), sums
 
 
 def gather(
@@ -364,7 +364,9 @@ def reduce_axis(
 
     n = starts.size
     if out is None:
-        return sub[:, order][:, starts], reducer.reduceat(data[order], starts)
+        return np.take(sub, order[starts], axis=1), reducer.reduceat(
+            data[order], starts
+        )
     out_idx, out_data = out[0][:, :n], out[1][:n]
     np.take(sub, order[starts], axis=1, out=out_idx)
     reducer.reduceat(data[order], starts, out=out_data)
@@ -544,13 +546,13 @@ def take_filled(data: Values, take: Positions, fill: float = 0.0) -> Values:
 
 def compress(idx: Index, data: Values, keep: npt.NDArray[np.bool_]) -> Block:
     """Return the entries where `keep` is True, in their order."""
-    return idx[:, keep], data[keep]
+    return np.compress(keep, idx, axis=1), data[keep]
 
 
 def multiply_lookup(idx: Index, data: Values, other: Values, take: Positions) -> Block:
     """Return the entries where `take` is not -1, each value times `other[take]`."""
     hit = take >= 0
-    return idx[:, hit], data[hit] * other[take[hit]]
+    return np.compress(hit, idx, axis=1), data[hit] * other[take[hit]]
 
 
 def multiply_join(

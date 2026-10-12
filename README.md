@@ -338,7 +338,7 @@ grouped.coords["g"]  # SubsetCoord(2 of (3,))
 
 The grouped dimensions are a leading prefix of the canonical order, and `group` raises `ValueError` otherwise. The result is then canonical as written and requires no sort. An entry at a coordinate outside the domain is removed. A `coord` with an extent larger than the member count and a non-zero `start` number the result inside a wider extent, and several results then share one destination buffer and one numbering. `group` raises `ValueError` for positions outside the extent of `coord`.
 
-`to_csr` exports a two-dimensional array as CSR arrays. Canonical order sorts by row and then by column, the order CSR requires. The column indices and the values are returned as views, and only the row pointer is built:
+`to_csr` exports a two-dimensional array as CSR arrays. Canonical order sorts by row and then by column, the order CSR requires. The column indices and the values are returned as views, and only the row pointer is built. The three arrays are C-contiguous:
 
 ```python
 indices, values, indptr = grouped.to_csr()
@@ -365,7 +365,7 @@ buffer.array(
 
 `buffer.array(...)` does not copy. `group`, `kernel.regroup`, `kernel.reduce_axis`, `kernel.gather` and `kernel.shift_axis` accept a reserved slice as the `out=` destination.
 
-`SparseArray.from_canonical` builds an array from canonical buffers without a copy. The caller guarantees that the index is sorted with no key repeated. `nb.is_canonical(index, shape)` checks that condition. It raises `TypeError` for an index that is not integer, and `ValueError` for an index that is not a 2-D matrix with one row per extent and each position inside its extent. `from_canonical` does not check it: the check requires the ravel that the method avoids.
+`SparseArray.from_canonical` builds an array from canonical buffers without a copy. The caller guarantees that the index is sorted with no key repeated, and that each row of the index is a C-contiguous int32 array. `nb.is_canonical(index, shape)` checks that condition. It raises `TypeError` for an index that is not integer, and `ValueError` for an index that is not a 2-D matrix with one row per extent and each position inside its extent. `from_canonical` does not check it: the check requires the ravel that the method avoids.
 
 ## Performance
 

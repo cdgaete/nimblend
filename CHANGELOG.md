@@ -26,6 +26,13 @@ only correct defects of that release, from 0. The releases up to 0.2.2 follow
   repeated coordinate in input order, adds them with `np.add.reduceat`, and
   returns one entry for the coordinate.
 
+### Fixed
+
+- Each row of the index of every array is a C-contiguous array, including
+  after a sort, a sum of repeated coordinates, a selection, and a product or
+  a quotient with a narrower array. `to_csr` returns three C-contiguous
+  arrays. scipy's compiled sparse routines accept them without a copy.
+
 ## 0.20260923.0 - 2026-09-23
 
 ### Added
