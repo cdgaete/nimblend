@@ -666,6 +666,16 @@ def regroup(
     return out_idx, out_data
 
 
+def accumulate(out: npt.NDArray[np.float64], idx: Index, data: Values) -> None:
+    """Add each value to `out` at its index, in place.
+
+    `out` has one axis per row of `idx`. Each index appears at most once.
+    """
+    if not data.size:
+        return
+    out.reshape(-1)[ravel(idx, out.shape)] += data
+
+
 def densify(
     idx: Index, data: Values, shape: Sequence[int], fill: float
 ) -> npt.NDArray[np.float64]:

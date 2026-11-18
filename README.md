@@ -298,6 +298,8 @@ An operation on a `SparseArray` and a `DenseArray` returns a `SparseArray`. The 
 
 `sum_arrays(arrays)` adds several arrays over one frame in one merge. The result equals adding them in order with `+`. A chain of `+` merges the running sum once per operand, and `sum_arrays` sorts the entries of all operands once. The operands have the same dimensions, labels and absence.
 
+`sum_to_dense(arrays)` returns the same sum as a numpy array of the shape of the frame, with 0.0 at a coordinate of no operand. It adds each operand into one buffer and builds no merged array. It equals `sum_arrays(arrays).to_dense()`. The operands declare absence `"empty"`.
+
 ## Operations
 
 Every operation below is part of the `Array` protocol, and both implementations support it.
@@ -408,7 +410,7 @@ The excess is constant at 9 MB. It is the working set of one sort-merge, not a s
 
 The package has two layers.
 
-`kernel.py` contains module-level functions over plain numpy buffers: `span`, `ravel`, `unravel`, `cells`, `distinct`, `first_unsorted`, `first_repeat`, `first_outside`, `canonicalize`, `merge_sum`, `align`, `lookup`, `gather`, `select_axis`, `compress`, `take_filled`, `multiply_lookup`, `multiply_join`, `cross`, `cross_keys`, `regroup`, `densify`, `reduce_axes`, `weighted_sum_axis`, `shift_axis`, `to_csr` and `is_canonical`. They take and return numpy arrays, and they use no labels or dimensions. A compiled module with the same signatures can replace the layer.
+`kernel.py` contains module-level functions over plain numpy buffers: `span`, `ravel`, `unravel`, `cells`, `distinct`, `first_unsorted`, `first_repeat`, `first_outside`, `canonicalize`, `merge_sum`, `align`, `lookup`, `gather`, `select_axis`, `compress`, `take_filled`, `multiply_lookup`, `multiply_join`, `cross`, `cross_keys`, `regroup`, `accumulate`, `densify`, `reduce_axes`, `weighted_sum_axis`, `shift_axis`, `to_csr` and `is_canonical`. They take and return numpy arrays, and they use no labels or dimensions. A compiled module with the same signatures can replace the layer.
 
 The array layer, `SparseArray`, `DenseArray`, `Domain` and the coordinates, stores the labels and the frames, validates the arguments, and calls the kernel functions. `SparseArray` and `Domain` call a kernel function for every sort, merge, lookup, gather, replication and reduction along an axis of their entries. These buffer operations are outside the kernel:
 
@@ -457,6 +459,7 @@ from nimblend import (
     from_dense,  # an array from a grid and its labels
     combined_dims,  # the frame of a binary result
     sum_arrays,  # the sum of several arrays over one frame, in one merge
+    sum_to_dense,  # the same sum as a numpy array, with no merged array
     is_canonical,  # whether an index is sorted with no key repeated
 )
 ```

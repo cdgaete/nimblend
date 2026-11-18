@@ -3,9 +3,10 @@
 `SparseArray` and `DenseArray` implement the `Array` protocol. `SparseArray`
 stores only the entries that are present. `from_long` builds one from one
 label column per dimension and one value column. `sum_arrays` adds several
-arrays over one frame in one merge. A `Domain` is a set of
-coordinates over a tuple of dimensions. `combined_dims` returns the
-dimensions of a binary result from the dimensions of the two operands.
+arrays over one frame in one merge. `sum_to_dense` adds them into one numpy
+array. A `Domain` is a set of coordinates over a tuple of dimensions.
+`combined_dims` returns the dimensions of a binary result from the dimensions
+of the two operands.
 """
 
 from collections.abc import Iterable, Mapping
@@ -26,7 +27,7 @@ from nimblend.dense import DenseArray
 from nimblend.domain import Domain
 from nimblend.frame import combined_dims
 from nimblend.protocol import Array
-from nimblend.sparse import SparseArray, is_canonical, sum_arrays
+from nimblend.sparse import SparseArray, is_canonical, sum_arrays, sum_to_dense
 
 __version__ = "0.20261012.0"
 
@@ -41,6 +42,7 @@ __all__ = [
     "from_dense",
     "is_canonical",
     "sum_arrays",
+    "sum_to_dense",
     "StoredCoord",
     "ProductCoord",
     "SubsetCoord",

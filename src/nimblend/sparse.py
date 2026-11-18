@@ -46,6 +46,48 @@ def is_canonical(index: npt.ArrayLike, shape: Iterable[int]) -> bool:
     return kernel.is_canonical(index, shape)
 
 
+def _over_one_frame(
+    arrays: Iterable["SparseArray"], caller: str
+) -> list["SparseArray"]:
+    """Return `arrays` as a list of SparseArrays over one frame and one absence.
+
+    Raises ValueError for no arrays, and for arrays with different
+    dimensions, labels or absence. Raises TypeError for an array that is not
+    a SparseArray.
+    """
+    arrays = list(arrays)
+    if not arrays:
+        raise ValueError("no array is given; pass at least one array")
+    for arr in arrays:
+        if not isinstance(arr, SparseArray):
+            raise TypeError(
+                f"{caller} adds SparseArray objects; got {type(arr).__name__}"
+            )
+    for arr in arrays[1:]:
+        frame.same_frame(arrays[0], arr)
+    return arrays
+
+
+def sum_to_dense(arrays: Iterable["SparseArray"]) -> npt.NDArray[np.float64]:
+    """Return the sum of arrays over one frame as a numpy array.
+
+    The result equals `sum_arrays(arrays).to_dense()`. No merged array is
+    built. A coordinate of no array is 0.0. Raises ValueError for no arrays,
+    for arrays with different dimensions or labels, and for absence
+    "unknown". Raises TypeError for an array that is not a SparseArray.
+    """
+    arrays = _over_one_frame(arrays, "sum_to_dense")
+    if arrays[0].absence == "unknown":
+        raise ValueError(
+            "absence is 'unknown' and an absent coordinate has no value; "
+            "convert each array with as_empty()"
+        )
+    out = np.zeros(arrays[0].shape, dtype=np.float64)
+    for arr in arrays:
+        kernel.accumulate(out, arr.index, arr.data)
+    return out
+
+
 def sum_arrays(arrays: Iterable["SparseArray"]) -> "SparseArray":
     """Return the sum of arrays over one frame, computed in one merge.
 
@@ -55,17 +97,8 @@ def sum_arrays(arrays: Iterable["SparseArray"]) -> "SparseArray":
     arrays with different dimensions, labels or absence. Raises TypeError for
     an array that is not a SparseArray.
     """
-    arrays = list(arrays)
-    if not arrays:
-        raise ValueError("no array is given; pass at least one array")
-    for arr in arrays:
-        if not isinstance(arr, SparseArray):
-            raise TypeError(
-                f"sum_arrays adds SparseArray objects; got {type(arr).__name__}"
-            )
+    arrays = _over_one_frame(arrays, "sum_arrays")
     first = arrays[0]
-    for arr in arrays[1:]:
-        frame.same_frame(first, arr)
     if len(arrays) == 1:
         return first
     how = "union" if first.absence == "empty" else "intersect"
