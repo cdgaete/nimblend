@@ -339,25 +339,32 @@ class SparseArray:
             index, data = kernel.select_axis(index, data, axis, at, len(coords[name]))
             dims.pop(axis)
             del coords[name]
-        return SparseArray(index, data, coords, tuple(dims), self.absence)
+        return SparseArray.from_canonical(
+            index, data, coords, tuple(dims), self.absence
+        )
 
     def as_empty(self) -> "SparseArray":
         """Return this array with absence "empty".
 
         An absent coordinate then contributes nothing.
         """
-        return SparseArray(self.index, self.data, self.coords, self.dims, "empty")
+        return SparseArray.from_canonical(
+            self.index, self.data, self.coords, self.dims, "empty"
+        )
 
     def as_unknown(self) -> "SparseArray":
         """Return this array with absence "unknown".
 
         An absent coordinate is then not modeled.
         """
-        return SparseArray(self.index, self.data, self.coords, self.dims, "unknown")
+        return SparseArray.from_canonical(
+            self.index, self.data, self.coords, self.dims, "unknown"
+        )
 
     def _scalar(self, value: Scalar, op: Binary) -> "SparseArray":
-        return SparseArray(
-            self.index, op(self.data, value), self.coords, self.dims, self.absence
+        data = np.asarray(op(self.data, value), dtype=np.float64)
+        return SparseArray.from_canonical(
+            self.index, data, self.coords, self.dims, self.absence
         )
 
     def _assemble(
@@ -454,7 +461,9 @@ class SparseArray:
             kernel.ravel(other.index[theirs], shape),
             [other.dims.index(d) for d in extra],
         )
-        return SparseArray(index, data, coords, self.dims + extra, self.absence)
+        return SparseArray.from_canonical(
+            index, data, coords, self.dims + extra, self.absence
+        )
 
     def __rmul__(self, other: "Operand | DenseArray") -> "SparseArray":
         return self.__mul__(other)
@@ -575,7 +584,7 @@ class SparseArray:
             data = data / counts
         dims = tuple(d for d in self.dims if d != dim)
         coords = {d: self.coords[d] for d in dims}
-        return SparseArray(index, data, coords, dims, self.absence)
+        return SparseArray.from_canonical(index, data, coords, dims, self.absence)
 
     def sum(
         self,
@@ -673,7 +682,11 @@ class SparseArray:
             index, data = kernel.shift_axis(
                 index, data, axis, amount, self.shape[axis], mode=mode
             )
-        return SparseArray(index, data, self.coords, self.dims, self.absence)
+        if mode == "wrap":
+            return SparseArray(index, data, self.coords, self.dims, self.absence)
+        return SparseArray.from_canonical(
+            index, data, self.coords, self.dims, self.absence
+        )
 
     def roll(self, shifts: Mapping[str, int]) -> "SparseArray":
         """Return the entries shifted along each dimension, wrapping at the ends.
