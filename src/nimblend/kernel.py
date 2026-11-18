@@ -569,21 +569,40 @@ def multiply_join(
     The index of an entry is its index in `idx_a`, then the axes `axes_b` of
     its index in `idx_b`. The entries are ordered by their position in
     `idx_a`, then by their position in `idx_b`. The keys do not need to be
-    sorted or unique.
+    sorted or unique. `keys_b` that ascend are not sorted. `keys_b` that
+    strictly ascend are read through `lookup`, one pair per entry of `idx_a`.
     """
-    order = np.argsort(keys_b, kind="stable")
-    sorted_b = keys_b[order]
+    held = idx_a.shape[0]
+    ascends = keys_b.size < 2 or bool(np.all(keys_b[1:] >= keys_b[:-1]))
+    if ascends and (keys_b.size < 2 or bool(np.all(keys_b[1:] != keys_b[:-1]))):
+        at = lookup(keys_b, keys_a)
+        hit = at >= 0
+        take_b = at[hit]
+        del at
+        index = np.empty((held + len(axes_b), take_b.size), dtype=np.int32)
+        for row in range(held):
+            np.compress(hit, idx_a[row], out=index[row])
+        for row, axis in enumerate(axes_b, start=held):
+            np.take(idx_b[axis], take_b, out=index[row])
+        return index, data_a[hit] * data_b[take_b]
+    if ascends:
+        order = None
+        sorted_b = keys_b
+    else:
+        order = np.argsort(keys_b, kind="stable")
+        sorted_b = keys_b[order]
     low = np.searchsorted(sorted_b, keys_a, "left")
     counts = np.searchsorted(sorted_b, keys_a, "right") - low
     total = int(counts.sum())
     take_a = np.repeat(np.arange(keys_a.size), counts)
-    offsets = np.arange(total) - np.repeat(np.cumsum(counts) - counts, counts)
-    take_b = order[np.repeat(low, counts) + offsets]
-    held = idx_a.shape[0]
+    take_b = np.arange(total) - np.repeat(np.cumsum(counts) - counts, counts)
+    take_b += np.repeat(low, counts)
+    if order is not None:
+        take_b = order[take_b]
     index = np.empty((held + len(axes_b), total), dtype=np.int32)
     np.take(idx_a, take_a, axis=1, out=index[:held])
-    for at, axis in enumerate(axes_b, start=held):
-        np.take(idx_b[axis], take_b, out=index[at])
+    for row, axis in enumerate(axes_b, start=held):
+        np.take(idx_b[axis], take_b, out=index[row])
     return index, data_a[take_a] * data_b[take_b]
 
 
