@@ -104,9 +104,9 @@ def test_merge_sum_returns_c_contiguous_rows():
     assert out_idx.flags.c_contiguous
 
 
-def test_reduce_axis_returns_c_contiguous_rows_after_a_sort():
+def test_reduce_axes_returns_c_contiguous_rows_after_a_sort():
     idx = np.array([[0, 1, 0], [2, 0, 0], [1, 1, 0]], dtype=np.int32)
-    out_idx, _ = kernel.reduce_axis(idx, np.ones(3), 0, (2, 3, 2))
+    out_idx, _ = kernel.reduce_axes(idx, np.ones(3), [0], (2, 3, 2))
     assert out_idx.flags.c_contiguous
 
 

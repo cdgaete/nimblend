@@ -555,94 +555,99 @@ class SparseArray:
         return kernel.densify(self.index, self.data, self.shape, value)
 
     def _reduce(
-        self, dim: str | None, op: str, skip: bool | None, fill: float | None
+        self,
+        dim: str | Iterable[str] | None,
+        op: str,
+        skip: bool | None,
+        fill: float | None,
     ) -> "SparseArray | float":
-        if dim is not None:
-            known_dims(op, (dim,), self.dims)
+        over = None if dim is None else frame.reduced_dims(self, dim, op)
         frame.reduction_policy(self, skip, fill)
-        if dim is None:
+        if over is None:
             frame.some_values(self, op, fill, self.nnz > 0)
             dense = self.data if fill is None else self._filled(fill)
             return float(getattr(np, op)(dense))
-        axis = self.dims.index(dim)
+        axes = [self.dims.index(d) for d in over]
+        dims = tuple(d for d in self.dims if d not in over)
+        coords = {d: self.coords[d] for d in dims}
         if fill is not None:
-            reduced = getattr(np, op)(self._filled(fill), axis=axis)
-            dims = tuple(d for d in self.dims if d != dim)
-            coords = {d: self.coords[d] for d in dims}
-            return Domain.full(dims, coords).array(reduced.ravel(), self.absence)
-        index, data = kernel.reduce_axis(
+            cells = getattr(np, op)(self._filled(fill), axis=tuple(axes))
+            return Domain.full(dims, coords).array(cells.ravel(), self.absence)
+        index, data = kernel.reduce_axes(
             self.index,
             self.data,
-            axis,
+            axes,
             self.shape,
             op="sum" if op == "mean" else op,
         )
         if op == "mean":
-            counts = kernel.reduce_axis(
-                self.index, np.ones_like(self.data), axis, self.shape, op="sum"
+            counts = kernel.reduce_axes(
+                self.index, np.ones_like(self.data), axes, self.shape, op="sum"
             )[1]
             data = data / counts
-        dims = tuple(d for d in self.dims if d != dim)
-        coords = {d: self.coords[d] for d in dims}
         return SparseArray.from_canonical(index, data, coords, dims, self.absence)
 
     def sum(
         self,
-        dim: str | None = None,
+        dim: str | Iterable[str] | None = None,
         skip: bool | None = None,
         fill: float | None = None,
     ) -> "SparseArray | float":
         """Return the sum over `dim`, or over the whole array when `dim` is None.
 
-        With `fill` each absent coordinate counts as `fill`. With `skip=True`
-        only the entries count. Raises ValueError for a `skip` other than True
-        or None, when both are given, and when neither is given under absence
-        "unknown".
+        `dim` is one dimension or several, and several are reduced in one
+        pass. With `fill` each absent coordinate counts as `fill`. With
+        `skip=True` only the entries count. Raises ValueError for a dimension
+        the array does not have, for a `skip` other than True or None, when
+        both are given, and when neither is given under absence "unknown".
         """
         return self._reduce(dim, "sum", skip, fill)
 
     def mean(
         self,
-        dim: str | None = None,
+        dim: str | Iterable[str] | None = None,
         skip: bool | None = None,
         fill: float | None = None,
     ) -> "SparseArray | float":
         """Return the mean over `dim`, or over the whole array when `dim` is None.
 
-        With `fill` each absent coordinate counts as `fill`. With `skip=True`
-        only the entries count. Raises ValueError for a `skip` other than True
-        or None, when both are given, and when neither is given under absence
-        "unknown".
+        `dim` is one dimension or several, and several are reduced in one
+        pass. With `fill` each absent coordinate counts as `fill`. With
+        `skip=True` only the entries count. Raises ValueError for a dimension
+        the array does not have, for a `skip` other than True or None, when
+        both are given, and when neither is given under absence "unknown".
         """
         return self._reduce(dim, "mean", skip, fill)
 
     def min(
         self,
-        dim: str | None = None,
+        dim: str | Iterable[str] | None = None,
         skip: bool | None = None,
         fill: float | None = None,
     ) -> "SparseArray | float":
         """Return the minimum over `dim`, or over the whole array when `dim` is None.
 
-        With `fill` each absent coordinate counts as `fill`. With `skip=True`
-        only the entries count. Raises ValueError for a `skip` other than True
-        or None, when both are given, and when neither is given under absence
-        "unknown".
+        `dim` is one dimension or several, and several are reduced in one
+        pass. With `fill` each absent coordinate counts as `fill`. With
+        `skip=True` only the entries count. Raises ValueError for a dimension
+        the array does not have, for a `skip` other than True or None, when
+        both are given, and when neither is given under absence "unknown".
         """
         return self._reduce(dim, "min", skip, fill)
 
     def max(
         self,
-        dim: str | None = None,
+        dim: str | Iterable[str] | None = None,
         skip: bool | None = None,
         fill: float | None = None,
     ) -> "SparseArray | float":
         """Return the maximum over `dim`, or over the whole array when `dim` is None.
 
-        With `fill` each absent coordinate counts as `fill`. With `skip=True`
-        only the entries count. Raises ValueError for a `skip` other than True
-        or None, when both are given, and when neither is given under absence
-        "unknown".
+        `dim` is one dimension or several, and several are reduced in one
+        pass. With `fill` each absent coordinate counts as `fill`. With
+        `skip=True` only the entries count. Raises ValueError for a dimension
+        the array does not have, for a `skip` other than True or None, when
+        both are given, and when neither is given under absence "unknown".
         """
         return self._reduce(dim, "max", skip, fill)
 

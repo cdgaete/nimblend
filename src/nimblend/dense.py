@@ -551,13 +551,16 @@ class DenseArray:
     _IDENTITY = {"sum": 0.0, "mean": 0.0, "min": np.inf, "max": -np.inf}
 
     def _reduce(
-        self, dim: str | None, op: str, skip: bool | None, fill: float | None
+        self,
+        dim: str | Iterable[str] | None,
+        op: str,
+        skip: bool | None,
+        fill: float | None,
     ) -> "DenseArray | float":
-        if dim is not None:
-            known_dims(op, (dim,), self.dims)
+        over = None if dim is None else frame.reduced_dims(self, dim, op)
         frame.reduction_policy(self, skip, fill)
         present = self.present
-        if dim is None:
+        if over is None:
             frame.some_values(self, op, fill, bool(present.any()))
         if fill is None:
             filled = np.where(present, self.data, self._IDENTITY[op])
@@ -565,35 +568,36 @@ class DenseArray:
             filled = np.where(present, self.data, float(fill))
             present = np.ones(self.shape, dtype=bool)
 
-        if dim is None:
+        if over is None:
             if op == "mean":
                 return float(filled.sum() / int(present.sum()))
             return float(getattr(np, op)(filled))
 
-        axis = self.dims.index(dim)
+        axes = tuple(self.dims.index(d) for d in over)
         if op == "mean":
-            counted = present.sum(axis=axis)
+            counted = present.sum(axis=axes)
             with np.errstate(invalid="ignore"):
-                reduced = filled.sum(axis=axis) / counted
+                reduced = filled.sum(axis=axes) / counted
             standing = counted > 0
         else:
-            reduced = getattr(np, op)(filled, axis=axis)
-            standing = present.any(axis=axis)
-        dims = tuple(d for d in self.dims if d != dim)
+            reduced = getattr(np, op)(filled, axis=axes)
+            standing = present.any(axis=axes)
+        dims = tuple(d for d in self.dims if d not in over)
         coords = {d: self.coords[d] for d in dims}
         data, mask = self._tagged(reduced, standing, self.absence)
         return DenseArray(data, coords, dims, self.absence, mask)
 
     def sum(
         self,
-        dim: str | None = None,
+        dim: str | Iterable[str] | None = None,
         skip: bool | None = None,
         fill: float | None = None,
     ) -> "DenseArray | float":
         """Return the sum over `dim`, or over the whole array when `dim` is None.
 
-        With `fill` each absent coordinate counts as `fill`. With `skip=True`
-        only the present coordinates count. Raises ValueError for a `skip`
+        `dim` is one dimension or several. With `fill` each absent coordinate
+        counts as `fill`. With `skip=True` only the present coordinates count.
+        Raises ValueError for a dimension the array does not have, for a `skip`
         other than True or None, when both are given, and when neither is given
         under absence "unknown".
         """
@@ -601,14 +605,15 @@ class DenseArray:
 
     def mean(
         self,
-        dim: str | None = None,
+        dim: str | Iterable[str] | None = None,
         skip: bool | None = None,
         fill: float | None = None,
     ) -> "DenseArray | float":
         """Return the mean over `dim`, or over the whole array when `dim` is None.
 
-        With `fill` each absent coordinate counts as `fill`. With `skip=True`
-        only the present coordinates count. Raises ValueError for a `skip`
+        `dim` is one dimension or several. With `fill` each absent coordinate
+        counts as `fill`. With `skip=True` only the present coordinates count.
+        Raises ValueError for a dimension the array does not have, for a `skip`
         other than True or None, when both are given, and when neither is given
         under absence "unknown".
         """
@@ -616,14 +621,15 @@ class DenseArray:
 
     def min(
         self,
-        dim: str | None = None,
+        dim: str | Iterable[str] | None = None,
         skip: bool | None = None,
         fill: float | None = None,
     ) -> "DenseArray | float":
         """Return the minimum over `dim`, or over the whole array when `dim` is None.
 
-        With `fill` each absent coordinate counts as `fill`. With `skip=True`
-        only the present coordinates count. Raises ValueError for a `skip`
+        `dim` is one dimension or several. With `fill` each absent coordinate
+        counts as `fill`. With `skip=True` only the present coordinates count.
+        Raises ValueError for a dimension the array does not have, for a `skip`
         other than True or None, when both are given, and when neither is given
         under absence "unknown".
         """
@@ -631,14 +637,15 @@ class DenseArray:
 
     def max(
         self,
-        dim: str | None = None,
+        dim: str | Iterable[str] | None = None,
         skip: bool | None = None,
         fill: float | None = None,
     ) -> "DenseArray | float":
         """Return the maximum over `dim`, or over the whole array when `dim` is None.
 
-        With `fill` each absent coordinate counts as `fill`. With `skip=True`
-        only the present coordinates count. Raises ValueError for a `skip`
+        `dim` is one dimension or several. With `fill` each absent coordinate
+        counts as `fill`. With `skip=True` only the present coordinates count.
+        Raises ValueError for a dimension the array does not have, for a `skip`
         other than True or None, when both are given, and when neither is given
         under absence "unknown".
         """

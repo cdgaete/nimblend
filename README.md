@@ -304,7 +304,7 @@ Every operation below is part of the `Array` protocol, and both implementations 
 
 **Arithmetic.** `+`, `-`, `*`, `/`, `**` by a number, unary `-`, and the reflected forms. The exponent of `**` is a number. An array as the exponent raises `TypeError`.
 
-**Reductions.** `sum`, `mean`, `min` and `max`, over one named dimension or over the whole array. Each takes the `skip=` or `fill=` policy that an `"unknown"` array requires. Reducing every dimension in turn returns an array over no dimension, with one entry: the total. `weighted_sum(dim, weights)` returns the sum over `dim` of each entry times the weight at its position along `dim`, with one weight per position. It equals the product with an array of the weights over `dim`, summed over `dim`. `SparseArray.weighted_sum` reads the entries in blocks and allocates no temporary of the size of the array.
+**Reductions.** `sum`, `mean`, `min` and `max`, over one named dimension, over several, or over the whole array. `array.sum(("year", "region"))` reduces both dimensions in one pass, and a `SparseArray` sorts its entries at most once. The mean over several dimensions is the mean of every value they contain. Each takes the `skip=` or `fill=` policy that an `"unknown"` array requires. Reducing every dimension by name returns an array over no dimension, with one entry: the total. `weighted_sum(dim, weights)` returns the sum over `dim` of each entry times the weight at its position along `dim`, with one weight per position. It equals the product with an array of the weights over `dim`, summed over `dim`. `SparseArray.weighted_sum` reads the entries in blocks and allocates no temporary of the size of the array.
 
 **Selection and reshaping**
 
@@ -363,7 +363,7 @@ buffer.array(
 # SparseArray(('a', 'b'), shape=(4, 2), nnz=3, absence='empty')
 ```
 
-`buffer.array(...)` does not copy. `group`, `kernel.regroup`, `kernel.reduce_axis`, `kernel.gather` and `kernel.shift_axis` accept a reserved slice as the `out=` destination.
+`buffer.array(...)` does not copy. `group`, `kernel.regroup`, `kernel.reduce_axes`, `kernel.gather` and `kernel.shift_axis` accept a reserved slice as the `out=` destination.
 
 `SparseArray.from_canonical` builds an array from canonical buffers without a copy. The caller guarantees that the index is sorted with no key repeated, and that each row of the index is a C-contiguous int32 array. `nb.is_canonical(index, shape)` checks that condition. It raises `TypeError` for an index that is not integer, and `ValueError` for an index that is not a 2-D matrix with one row per extent and each position inside its extent. `from_canonical` does not check it: the check requires the ravel that the method avoids.
 
@@ -408,7 +408,7 @@ The excess is constant at 9 MB. It is the working set of one sort-merge, not a s
 
 The package has two layers.
 
-`kernel.py` contains module-level functions over plain numpy buffers: `span`, `ravel`, `unravel`, `distinct`, `first_unsorted`, `first_repeat`, `first_outside`, `canonicalize`, `merge_sum`, `align`, `lookup`, `gather`, `select_axis`, `compress`, `take_filled`, `multiply_lookup`, `multiply_join`, `cross`, `cross_keys`, `regroup`, `densify`, `reduce_axis`, `weighted_sum_axis`, `shift_axis`, `to_csr` and `is_canonical`. They take and return numpy arrays, and they use no labels or dimensions. A compiled module with the same signatures can replace the layer.
+`kernel.py` contains module-level functions over plain numpy buffers: `span`, `ravel`, `unravel`, `cells`, `distinct`, `first_unsorted`, `first_repeat`, `first_outside`, `canonicalize`, `merge_sum`, `align`, `lookup`, `gather`, `select_axis`, `compress`, `take_filled`, `multiply_lookup`, `multiply_join`, `cross`, `cross_keys`, `regroup`, `densify`, `reduce_axes`, `weighted_sum_axis`, `shift_axis`, `to_csr` and `is_canonical`. They take and return numpy arrays, and they use no labels or dimensions. A compiled module with the same signatures can replace the layer.
 
 The array layer, `SparseArray`, `DenseArray`, `Domain` and the coordinates, stores the labels and the frames, validates the arguments, and calls the kernel functions. `SparseArray` and `Domain` call a kernel function for every sort, merge, lookup, gather, replication and reduction along an axis of their entries. These buffer operations are outside the kernel:
 

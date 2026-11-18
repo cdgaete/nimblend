@@ -17,9 +17,9 @@ def block(n_rows, n_cols):
 
 def test_reduce_into_out_matches_reduce_without_out():
     idx, data = block(20, 5)
-    want_idx, want_data = kernel.reduce_axis(idx, data, 1, (20, 5, 100))
+    want_idx, want_data = kernel.reduce_axes(idx, data, [1], (20, 5, 100))
     dest = (np.empty((2, 100), dtype=np.int32), np.empty(100))
-    got_idx, got_data = kernel.reduce_axis(idx, data, 1, (20, 5, 100), out=dest)
+    got_idx, got_data = kernel.reduce_axes(idx, data, [1], (20, 5, 100), out=dest)
     assert np.array_equal(got_idx, want_idx)
     assert np.array_equal(got_data, want_data)
     assert np.shares_memory(got_data, dest[1])
@@ -33,7 +33,7 @@ def test_reduce_into_out_does_not_allocate_a_second_copy_of_the_block():
     dest = (np.empty((2, n_out), dtype=np.int32), np.empty(n_out))
     tracemalloc.start()
     before, _ = tracemalloc.get_traced_memory()
-    kernel.reduce_axis(idx, data, 1, (2000, 250, n_out), out=dest)
+    kernel.reduce_axes(idx, data, [1], (2000, 250, n_out), out=dest)
     _, peak = tracemalloc.get_traced_memory()
     tracemalloc.stop()
     block_bytes = n_out * (2 * 4 + 8)
@@ -44,9 +44,9 @@ def test_min_and_max_also_write_into_out():
     idx = np.array([[0, 0, 1], [0, 1, 0]], dtype=np.int32)
     data = np.array([4.0, -1.0, 9.0])
     dest = (np.empty((1, 4), dtype=np.int32), np.empty(4))
-    _, mins = kernel.reduce_axis(idx, data, 1, (2, 2), op="min", out=dest)
+    _, mins = kernel.reduce_axes(idx, data, [1], (2, 2), op="min", out=dest)
     assert list(mins) == [-1.0, 9.0]
-    _, maxs = kernel.reduce_axis(idx, data, 1, (2, 2), op="max", out=dest)
+    _, maxs = kernel.reduce_axes(idx, data, [1], (2, 2), op="max", out=dest)
     assert list(maxs) == [4.0, 9.0]
 
 
@@ -56,6 +56,6 @@ def test_reduce_into_a_non_contiguous_destination_slice():
     big_idx = np.full((1, 10), -7, dtype=np.int32)
     big_data = np.full(10, -7.0)
     dest = (big_idx[:, 4:8], big_data[4:8])
-    out_idx, out_data = kernel.reduce_axis(idx, data, 1, (2, 2), out=dest)
+    out_idx, out_data = kernel.reduce_axes(idx, data, [1], (2, 2), out=dest)
     assert list(out_data) == [3.0, 5.0]
     assert list(big_data[3:7]) == [-7.0, 3.0, 5.0, -7.0]

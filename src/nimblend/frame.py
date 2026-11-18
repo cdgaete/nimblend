@@ -172,6 +172,21 @@ def renamed_frame(
     return dims, coords
 
 
+def reduced_dims(array: Any, dim: Any, op: str) -> tuple[str, ...]:
+    """Return the dimensions the reduction `op` over `dim` removes from `array`.
+
+    `dim` is one dimension or an iterable of several. A string, and a value
+    that is not iterable, is one dimension. Raises ValueError for no
+    dimension, a repeated dimension and a dimension the array does not have.
+    """
+    several = isinstance(dim, Iterable) and not isinstance(dim, (str, bytes))
+    dims = unique_dims(dim) if several else (dim,)
+    if not dims:
+        raise ValueError("no dimension is given; pass at least one dimension")
+    known_dims(op, dims, array.dims)
+    return dims
+
+
 def reduction_policy(
     array: Any, skip: bool | None, fill: float | None, takes_fill: bool = True
 ) -> None:

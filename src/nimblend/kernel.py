@@ -310,26 +310,27 @@ def gather(
 _REDUCERS = {"sum": np.add, "min": np.minimum, "max": np.maximum}
 
 
-def reduce_axis(
+def reduce_axes(
     idx: Index,
     data: Values,
-    axis: int,
+    axes: Sequence[int],
     shape: Sequence[int],
     op: str = "sum",
     out: Block | None = None,
 ) -> Block:
-    """Return the entries without `axis`, combining those at the same coordinate.
+    """Return the entries without `axes`, combining those at the same coordinate.
 
-    `op` is "sum", "min" or "max". Entries whose remaining coordinates strictly
-    ascend are returned without a sort. Removing the only axis of a non-empty
-    block returns one entry. With `out` the result is written into `out`.
-    Raises ValueError for another `op`.
+    `op` is "sum", "min" or "max". The entries are sorted at most once, for
+    any number of axes. Entries whose remaining coordinates strictly ascend
+    are returned without a sort. Removing every axis of a non-empty block
+    returns one entry. With `out` the result is written into `out`. Raises
+    ValueError for another `op`.
     """
     reducer = _REDUCERS.get(op)
     if reducer is None:
         raise ValueError(f"op is one of sum, min, max; got {op!r}")
 
-    kept = [a for a in range(idx.shape[0]) if a != axis]
+    kept = [a for a in range(idx.shape[0]) if a not in axes]
     sub_shape = [shape[a] for a in kept]
     rows = [idx[a] for a in kept]
     if data.size == 0:

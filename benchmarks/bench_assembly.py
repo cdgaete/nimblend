@@ -32,10 +32,10 @@ def measure(n_rows, n_cols, n_blocks):
     data = np.empty(total, dtype=np.float64)
     at = 0
     for _ in range(n_blocks):
-        kernel.reduce_axis(
+        kernel.reduce_axes(
             src_idx,
             src_data,
-            1,
+            [1],
             (n_rows, n_cols, per_block),
             out=(index[:, at : at + per_block], data[at : at + per_block]),
         )

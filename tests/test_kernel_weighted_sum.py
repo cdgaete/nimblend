@@ -43,12 +43,12 @@ def test_weighted_sum_matches_the_dense_reference(shape, nnz, axis, block):
 
 
 @pytest.mark.parametrize("block", [1, 3, 1 << 22])
-def test_weighted_sum_matches_reduce_axis_over_the_weighted_values(block):
+def test_weighted_sum_matches_reduce_axes_over_the_weighted_values(block):
     rng = np.random.default_rng(11)
     shape = (40, 30)
     idx, data = canonical(*random_block(rng, shape, 500), shape)
     weights = rng.standard_normal(shape[0])
-    ref_idx, ref_data = kernel.reduce_axis(idx, data * weights[idx[0]], 0, shape)
+    ref_idx, ref_data = kernel.reduce_axes(idx, data * weights[idx[0]], [0], shape)
     out_idx, out_data = kernel.weighted_sum_axis(
         idx, data, 0, weights, shape, block=block
     )

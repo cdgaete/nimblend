@@ -19,6 +19,10 @@ only correct defects of that release, from 0. The releases up to 0.2.2 follow
 
 ## Unreleased
 
+### Added
+
+- `sum`, `mean`, `min` and `max` take several dimensions, as in `array.sum(("x", "y"))`. The mean over several dimensions is the mean of every value they contain. A `SparseArray` sorts its entries at most once for any number of dimensions, and not at all when the remaining coordinates ascend. A sum of 5,580,120 entries over two of three dimensions, with ascending remaining coordinates, takes 8.8 ms and allocates 50 MB. One dimension at a time it takes 390.4 ms and allocates 312 MB.
+
 ### Changed
 
 - An operation that returns its entries in the order it reads them builds its result without a second sort and without a copy: arithmetic with a number, `sum`, `mean`, `min` and `max` over dimensions, `shift` with mode `"drop"`, `sel`, `as_empty`, `as_unknown`, and the product of two arrays that share some of their dimensions. Arithmetic with a number returns an array that shares the index of its operand. The product of 5,580,120 entries with a number takes 5.1 ms instead of 34.6 ms and allocates 45 MB instead of 184 MB.
