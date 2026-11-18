@@ -367,6 +367,8 @@ buffer.array(
 
 `buffer.array(...)` does not copy. `group`, `kernel.regroup`, `kernel.reduce_axes`, `kernel.gather` and `kernel.shift_axis` accept a reserved slice as the `out=` destination.
 
+`EntryBuffer(ndim, capacity, resizable=True)` allocates larger buffers when a reservation exceeds its capacity, and a view reserved before that refers to the buffers before it.
+
 `SparseArray.from_canonical` builds an array from canonical buffers without a copy. The caller guarantees that the index is sorted with no key repeated, and that each row of the index is a C-contiguous int32 array. `nb.is_canonical(index, shape)` checks that condition. It raises `TypeError` for an index that is not integer, and `ValueError` for an index that is not a 2-D matrix with one row per extent and each position inside its extent. `from_canonical` does not check it: the check requires the ravel that the method avoids.
 
 ## Performance

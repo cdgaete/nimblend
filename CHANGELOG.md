@@ -23,6 +23,7 @@ only correct defects of that release, from 0. The releases up to 0.2.2 follow
 
 - `sum`, `mean`, `min` and `max` take several dimensions, as in `array.sum(("x", "y"))`. The mean over several dimensions is the mean of every value they contain. A `SparseArray` sorts its entries at most once for any number of dimensions, and not at all when the remaining coordinates ascend. A sum of 5,580,120 entries over two of three dimensions, with ascending remaining coordinates, takes 8.8 ms and allocates 50 MB. One dimension at a time it takes 390.4 ms and allocates 312 MB.
 - `sum_to_dense(arrays)` returns the sum of several arrays over one frame as a numpy array, with 0.0 at a coordinate of no array. It adds each array into one buffer and builds no merged array. It raises `ValueError` for no arrays, for arrays with different dimensions or labels and for absence `"unknown"`, and `TypeError` for an array that is not a `SparseArray`. On four arrays of 7.9 million entries over 9.36 million cells it takes 52.3 ms and allocates 164 MB. `sum_arrays(arrays).to_dense()` takes 124.5 ms and allocates 515 MB.
+- `EntryBuffer(ndim, capacity, resizable=True)` allocates larger buffers when a reservation exceeds its capacity.
 
 ### Changed
 
