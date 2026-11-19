@@ -19,6 +19,8 @@ only correct defects of that release, from 0. The releases up to 0.2.2 follow
 
 ## Unreleased
 
+## 0.20261118.0 - 2026-11-18
+
 ### Added
 
 - `sum`, `mean`, `min` and `max` take several dimensions, as in `array.sum(("x", "y"))`. The mean over several dimensions is the mean of every value they contain. A `SparseArray` sorts its entries at most once for any number of dimensions, and not at all when the remaining coordinates ascend. A sum of 5,580,120 entries over two of three dimensions, with ascending remaining coordinates, takes 8.8 ms and allocates 50 MB. One dimension at a time it takes 390.4 ms and allocates 312 MB.
