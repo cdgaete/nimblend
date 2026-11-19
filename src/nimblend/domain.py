@@ -225,6 +225,24 @@ class Domain:
             return kernel.unravel(self.codes, self.shape)
         return kernel.unravel(self.codes[self._members_at(positions)], self.shape)
 
+    def take(self, positions: npt.ArrayLike) -> "Domain":
+        """Return the members at `positions` as a domain over the same frame.
+
+        `positions` strictly ascend. Raises ValueError for positions that are
+        not one-dimensional, that are not integers, that lie outside the
+        domain, and that do not strictly ascend.
+        """
+        at = self._members_at(positions)
+        step = at[1:] <= at[:-1]
+        if step.any():
+            unsorted = int(np.flatnonzero(step)[0])
+            raise ValueError(
+                f"position {int(at[unsorted + 1])} follows position "
+                f"{int(at[unsorted])}; pass positions that ascend without "
+                f"repeating"
+            )
+        return Domain._over(self.codes[at], self.dims, self.coords, self.shape)
+
     def labels(
         self, positions: npt.ArrayLike | None = None
     ) -> dict[str, npt.NDArray[Any]]:
