@@ -19,6 +19,8 @@ only correct defects of that release, from 0. The releases up to 0.2.2 follow
 
 ## Unreleased
 
+## 0.20261119.0 - 2026-11-19
+
 ### Added
 
 - `Domain.take(positions)` returns the members at ascending positions as a domain over the same frame.
