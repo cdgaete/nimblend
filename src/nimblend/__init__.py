@@ -29,7 +29,7 @@ from nimblend.frame import combined_dims
 from nimblend.protocol import Array
 from nimblend.sparse import SparseArray, is_canonical, sum_arrays, sum_to_dense
 
-__version__ = "0.20261118.0"
+__version__ = "0.20261118.1"
 
 __all__ = [
     "Array",
