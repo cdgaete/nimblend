@@ -253,7 +253,9 @@ class SparseArray:
     def restrict(self, domain: Domain) -> "SparseArray":
         """Return the entries whose coordinate over `domain.dims` is in `domain`.
 
-        Raises ValueError for a domain over a dimension the array does not have.
+        Raises ValueError for a domain over a dimension the array does not
+        have, and for a dimension with different extents or different labels
+        in the array and the domain.
         """
         lacking = [d for d in domain.dims if d not in self.dims]
         if lacking:
@@ -756,9 +758,11 @@ class SparseArray:
         of entries inside `domain` and returns the destination, as
         `EntryBuffer.reserve` does. Raises ValueError for a `dims` that is not a
         leading prefix, an `into` among the remaining dimensions, a negative
-        `start`, positions outside the extent of `coord`, `out` and `reserve`
-        together, and a destination whose size differs from the number of
-        entries. Nothing is written into a destination of another size.
+        `start`, positions outside the extent of `coord`, a `domain` with
+        different extents or different labels than the array, `out` and
+        `reserve` together, and a destination whose size differs from the
+        number of entries. Nothing is written into a destination of another
+        size.
         """
         if out is not None and reserve is not None:
             raise ValueError("group takes one destination; pass out or reserve")

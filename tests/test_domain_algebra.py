@@ -122,6 +122,15 @@ def test_positions_of_refuses_an_array_whose_shape_differs():
         domain([0]).positions_of(arr)
 
 
+def test_positions_of_raises_for_an_array_with_other_labels_on_a_dimension():
+    # position 0 of x is "b" in the domain and "a" in the array
+    arr = block([[1.0, 0.0, 0.0], [0.0, 2.0, 0.0]])
+    coords = {"x": StoredCoord(np.array(["b", "a"])), "y": coords_xy()["y"]}
+    held = Domain(np.array([0], dtype=np.int64), ("x", "y"), coords, (2, 3))
+    with pytest.raises(ValueError, match="different labels in the two operands"):
+        held.positions_of(arr)
+
+
 def test_domain_algebra_refuses_domains_whose_labels_differ():
     other = Domain(
         np.array([0, 4], dtype=np.int64),

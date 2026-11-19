@@ -57,6 +57,13 @@ def test_restricting_by_a_domain_over_a_dimension_not_carried_is_refused():
         build().restrict(foreign)
 
 
+def test_restricting_by_a_domain_with_other_labels_raises():
+    # position 0 of x is "b" in the domain and "a" in the array
+    other = build(labels={"x": np.array(["b", "a"]), "y": LABELS["y"]})
+    with pytest.raises(ValueError, match="different labels in the two operands"):
+        build().restrict(other.domain(("x",)))
+
+
 def test_operating_across_frames_that_share_no_dimension_is_refused():
     with pytest.raises(ValueError, match="share no dimension"):
         build() + build().rename({"x": "q", "y": "z"})

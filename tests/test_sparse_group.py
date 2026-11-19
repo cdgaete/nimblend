@@ -5,7 +5,7 @@ import pytest
 
 from nimblend import kernel
 from nimblend.buffer import EntryBuffer
-from nimblend.coords import ProductCoord
+from nimblend.coords import ProductCoord, StoredCoord
 from nimblend.domain import Domain
 from nimblend.sparse import SparseArray
 
@@ -105,6 +105,15 @@ def test_group_drops_entries_a_supplied_domain_does_not_carry():
     got = arr.group(("i", "j"), "g", domain=first_two.domain(("i", "j")))
     assert got.nnz == 2
     assert got.data.tolist() == [5.0, 7.0]
+
+
+def test_group_raises_for_a_supplied_domain_with_other_labels():
+    arr = ijc()
+    # position 0 of i is "q" in the domain and "p" in the array
+    coords = {"i": StoredCoord(np.array(["q", "p"])), "j": arr.coords["j"]}
+    other = Domain(np.array([0]), ("i", "j"), coords, (2, 3))
+    with pytest.raises(ValueError, match="different labels in the two operands"):
+        arr.group(("i", "j"), "g", domain=other)
 
 
 def test_group_writes_into_a_supplied_buffer():

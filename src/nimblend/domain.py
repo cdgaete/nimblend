@@ -319,7 +319,8 @@ class Domain:
         """Return the position of each entry of `array` here, -1 where absent.
 
         `array` must have every dimension of the domain. Raises ValueError for
-        dimensions with different extents in the array and the domain.
+        dimensions with different extents or different labels in the array
+        and the domain.
         """
         axes = [array.dims.index(name) for name in self.dims]
         sizes = tuple(array.shape[axis] for axis in axes)
@@ -329,6 +330,13 @@ class Domain:
                 f"{self.shape} in this domain; pass an array over the "
                 f"coordinates of the domain"
             )
+        same_labels(
+            self.dims,
+            array.coords,
+            self.coords,
+            operands="operands",
+            action="pass an array over the coordinates of the domain",
+        )
         if axes == list(range(len(axes))):
             index = array.index[: len(axes)]
         else:

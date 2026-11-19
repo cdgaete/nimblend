@@ -1,6 +1,8 @@
 import numpy as np
+import pytest
 
 from nimblend import kernel
+from nimblend.coords import StoredCoord
 from nimblend.domain import Domain
 from nimblend.sparse import SparseArray
 
@@ -70,3 +72,12 @@ def test_restricting_to_an_empty_domain_leaves_no_entry():
         arr.index[:, :0], arr.data[:0], arr.coords, arr.dims
     )
     assert arr.restrict(empty.domain()).nnz == 0
+
+
+def test_restrict_raises_for_a_domain_with_other_labels_on_a_dimension():
+    arr = xy()
+    # position 0 of x is "b" in the domain and "a" in the array
+    reordered = {"x": StoredCoord(np.array(["b", "a"]))}
+    only_b = Domain(np.array([0]), ("x",), reordered, (2,))
+    with pytest.raises(ValueError, match="different labels in the two operands"):
+        arr.restrict(only_b)

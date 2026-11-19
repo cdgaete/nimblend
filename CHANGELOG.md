@@ -19,6 +19,10 @@ only correct defects of that release, from 0. The releases up to 0.2.2 follow
 
 ## Unreleased
 
+### Fixed
+
+- `restrict`, `group` with a `domain`, and `Domain.positions_of` raise `ValueError` for a dimension with different labels in the array and the domain.
+
 ## 0.20261118.0 - 2026-11-18
 
 ### Added

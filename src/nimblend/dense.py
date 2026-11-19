@@ -13,6 +13,7 @@ from nimblend.coords import (
     distinct_labels,
     known_dims,
     require_coords,
+    same_labels,
     unique_dims,
 )
 from nimblend.domain import Domain
@@ -197,6 +198,13 @@ class DenseArray:
                 f"dimension(s) {lacking} of the domain are not in the array over "
                 f"{self.dims}; pass a domain over dimensions of the array"
             )
+        same_labels(
+            domain.dims,
+            self.coords,
+            domain.coords,
+            operands="operands",
+            action="pass a domain over the coordinates of the array",
+        )
         members = np.zeros(domain.shape, dtype=bool)
         members[tuple(domain.coordinates())] = True
         axes = frame.axes_of(self, domain.dims, "restrict")
@@ -209,7 +217,9 @@ class DenseArray:
     def restrict(self, domain: Domain) -> "DenseArray":
         """Return the present coordinates of this array that are in `domain`.
 
-        Raises ValueError for a domain over a dimension the array does not have.
+        Raises ValueError for a domain over a dimension the array does not
+        have, and for a dimension with different labels in the array and the
+        domain.
         """
         keep = self.present & self._spread(domain)
         data, mask = self._tagged(self.data, keep, self.absence)
